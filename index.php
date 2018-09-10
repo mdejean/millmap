@@ -1,0 +1,367 @@
+<?php
+ini_set('html_errors', 0);
+
+$db = new SQLite3('millmap.sqlite');
+
+if (isset($_GET['update_schema'])) {
+    header('Content-Type: text/plain');
+    $success = true;
+    $tables = ['schedules', 'actions', 'street_stretches', 'corrections'];
+    foreach ($tables as $t) {
+        $success = $db->exec("alter table $t rename to old_$t;");
+        if (!$success) {
+            break;
+        }
+    }
+    if (!$success) {
+        die("wtf");
+    }
+    $db->exec('
+create table schedules (
+    url text, 
+    access_date int, 
+    file blob, 
+    converted_text text, 
+    start_date int, 
+    end_date int, 
+    processed int not null default 0,
+    primary key (url, access_date)
+) without rowid');
+    $db->exec('
+create table actions (
+    action_date int, 
+    is_milling int, 
+    borough int,
+    on_street text,
+    from_street text, 
+    to_street text,
+    sa text,
+    community_board int,
+    neighborhood text,
+    primary key (action_date, borough, on_street, from_street, to_street)
+) without rowid');
+    $db->exec('
+create table street_stretches (
+    borough int,
+    on_street text,
+    from_street text, 
+    to_street text,
+    from_direction text not null default \'\',
+    to_direction text not null default \'\',
+    points text,
+    primary key (borough, on_street, from_street, to_street, from_direction, to_direction)
+) without rowid');
+    $db->exec('
+create table corrections (
+    borough int,
+    on_street text,
+    from_street text, 
+    to_street text,
+    new_borough int,
+    new_on_street text,
+    new_from_street text, 
+    new_to_street text,
+    from_direction text,
+    to_direction text)');
+    foreach ($tables as $t) {
+        $columns = array_keys($db->querySingle("select * from old_$t limit 1", true));
+        $q = "insert into $t (" . implode(",", $columns) . ") select * from old_$t";
+        echo $q;
+        $success = $db->exec($q);
+        if (!$success) break;
+    }
+    if ($success) {
+        foreach ($tables as $t) {
+            $db->exec("drop table old_$t");
+        }
+        echo "schema update succeeded";
+    } else {
+        foreach ($tables as $t) {
+            $db->exec("drop table $t; alter table old_$t rename to $t;");
+        }
+        echo "schema update failed";
+    }
+}
+
+function get_last_date($db, $url) {
+    $q = $db->prepare('select max(access_date) last_date from schedules where url = :url');
+    $q->bindValue(':url', $url);
+    $result = $q->execute();
+    $ret = $result->fetchArray()[0];
+    $result->finalize();
+    return $ret;
+}
+
+function pdf_to_text($pdf) {
+    $file = tmpfile();
+    fwrite($file, $pdf);
+    fseek($file, 0);
+    $p = exec('tet -o - -- ' . stream_get_meta_data($file)['uri'], $text);
+    fclose($file);
+    //TET outputs \x0C for page breaks
+    return str_replace("\x0C", "\n", implode("\n", $text));
+}
+
+function parse_schedule($db, $s, $start_date) {
+    $ret = 0; //returns number of rows added
+
+    $boroughs = ['Manhattan' => 1, 'Bronx' => 2, 'Brooklyn' => 3, 'Queens' => 4, 'Staten Island' => 5];
+    $weekdays = array_flip(['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']);
+    
+    $borough = 0;
+    $action_date = null;
+    $is_milling = null;
+    
+    foreach (explode("\n", $s) as $line) {
+        $line = trim($line, " \t\r\n\xef\xbb\xbf\0");
+        
+        if (isset($boroughs[$line])) {
+            $borough = $boroughs[$line];
+        } elseif (isset($weekdays[$line])) {
+            $action_date = $start_date + $weekdays[$line] * (60 * 60 * 24);
+            $is_milling = null;
+        } elseif (stripos($line, 'paving crew') !== false) {
+            $is_milling = false;
+        } elseif (stripos($line, 'milling') !== false) {
+            $is_milling = true;
+        } elseif (preg_match('/^(\d+-\d+-\d+)? ?([MQKXS][\d-]+)? ([^(]*)\((.*) (to|-) (.*)\) ?(- \w+)? ?(\d+)? ?(.*)?$/', $line, $match)) {
+            //example: 7-26-18 M2018-08-17 Broadway (218th St to W 225th St Bridge) 12 Inwood
+            list(            , $date,            $sa,            $on_street, $from_street, , $to_street, , $cb, $neighborhood) = $match;
+            
+            $q = $db->prepare('insert into actions values (:action_date, :is_milling, :borough, :on_street, :from_street, :to_street, :sa, :cb, :neighborhood)');
+            
+            $q->bindValue(':action_date', $action_date);
+            $q->bindValue(':is_milling', $is_milling);
+            $q->bindValue(':borough', $borough);
+            $q->bindValue(':on_street', $on_street);
+            $q->bindValue(':from_street', $from_street);
+            $q->bindValue(':to_street', $to_street);
+            $q->bindValue(':sa', $sa);
+            $q->bindValue(':cb', $cb);
+            $q->bindValue(':neighborhood', $neighborhood);
+            
+            if ($q->execute() === false) {
+                echo $action_date, $line . "\n";
+            } else {
+                $ret++;
+            }
+        }
+    }
+    
+    return $ret;
+}
+
+function fetch_updates($db) {
+    $urls = [
+        'http://www.nyc.gov/html/dot/downloads/pdf/artresurf.pdf',
+        'http://www.nyc.gov/html/dot/downloads/pdf/mnresurf.pdf',
+        'http://www.nyc.gov/html/dot/downloads/pdf/bkresurf.pdf',
+        'http://www.nyc.gov/html/dot/downloads/pdf/qnresurf.pdf',
+        'http://www.nyc.gov/html/dot/downloads/pdf/siresurf.pdf',
+        'http://www.nyc.gov/html/dot/downloads/pdf/bxresurf.pdf',
+    ];
+    foreach ($urls as $url) {
+        $last_update = get_last_date($db, $url);
+        $curl = curl_init($url);
+        curl_setopt($curl, CURLOPT_TIMECONDITION, CURL_TIMECOND_IFMODSINCE);
+        curl_setopt($curl, CURLOPT_TIMEVALUE, $last_update);
+        curl_setopt($curl, CURLOPT_FILETIME, true);
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+        $result = curl_exec($curl);
+        if ($result === false 
+            or curl_getinfo($curl, CURLINFO_RESPONSE_CODE) != '200' 
+            or curl_getinfo($curl, CURLINFO_FILETIME) <= $last_update) {
+            curl_close($curl);
+        } else {
+            curl_close($curl);
+            $text = pdf_to_text($result);
+            
+            $start_date = null;
+            $end_date = null;
+            preg_match("/Milling & Paving Schedule\n(.*)/", $text, $match);
+            if (isset($match[1])) {
+                $dates = explode(' to ', $match[1]); 
+                $start_date = strtotime($dates[0]);
+                $end_date = strtotime($dates[1]);
+            }
+            
+            $q = $db->prepare('insert into schedules values (:url, :access_date, :file, :text, :start_date, :end_date, 0)');
+            $q->bindValue(':url', $url); 
+            $q->bindValue(':access_date', time()); 
+            $q->bindParam(':file', $result, SQLITE3_BLOB); 
+            $q->bindValue(':text', $text); 
+            $q->bindValue(':start_date', $start_date); 
+            $q->bindValue(':end_date', $end_date);
+            $q->execute();
+            echo "got $url\n";
+        }
+    }
+}
+
+function reconvert_schedules($db) {
+    $schedules = $db->query('select url, access_date, file from schedules');
+    $q = $db->prepare('update schedules set converted_text = :text where url = :url and access_date = :access_date');
+    while (($row = $schedules->fetchArray(SQLITE3_ASSOC)) !== false) {
+        $text = pdf_to_text($row['file']);
+        $q->bindValue(':text', $text);
+        $q->bindValue(':url', $row['url']);
+        $q->bindValue(':access_date', $row['access_date']);
+        $q->execute();
+        $q->reset();
+    }
+}
+
+function parse_schedules($db, $all = false) {
+    $ret = 0;
+    if ($all) {
+        $db->query('delete from actions');
+    }
+    $result = $db->query('select url, access_date, start_date, converted_text from schedules' . ($all ? '' : ' where processed = 0'));
+    $q = $db->prepare('update schedules set processed = 1 where url = :url and access_date = :access_date');
+    while (($row = $result->fetchArray()) !== false) {
+        $ret += parse_schedule($db, $row['converted_text'], $row['start_date']);
+        $q->bindValue(':url', $row['url']);
+        $q->bindValue(':access_date', $row['access_date']);
+        $q->execute();
+        $q->reset();
+    }
+    return $ret;
+}
+
+function add_street_stretches($db) {
+    $valid = 0;
+    $invalid = 0;
+
+    $street_stretches = $db->query('
+select 
+    a.borough, 
+    a.on_street, 
+    a.from_street, 
+    a.to_street 
+from actions a 
+left join street_stretches ss
+    on a.borough = ss.borough
+    and a.on_street = ss.on_street
+    and a.from_street = ss.from_street
+    and a.to_street = ss.to_street
+where ss.points is null');
+
+    $add_ss = $db->prepare('insert into street_stretches (borough, on_street, from_street, to_street, points) values (:borough, :on_street, :from_street, :to_street, :points)');
+    while (($row = $street_stretches->fetchArray()) !== false) {
+        $out = exec('streetstretch ' . escapeshellarg($row['borough'])
+            . ' ' . escapeshellarg($row['on_street']) 
+            . ' ' . escapeshellarg($row['from_street']) 
+            . ' ' . escapeshellarg($row['to_street']));
+        $add_ss->bindValue(':borough', $row['borough']);
+        $add_ss->bindValue(':on_street', $row['on_street']);
+        $add_ss->bindValue(':from_street', $row['from_street']);
+        $add_ss->bindValue(':to_street', $row['to_street']);
+        $add_ss->bindValue(':points', $out);
+        $add_ss->execute();
+        $add_ss->reset();
+        if (strpos($out, "{") === 0) {
+            $invalid++;
+        } else {
+            $valid++;
+        }
+    }
+    
+    echo "added $valid valid and $invalid invalid street stretches\n";
+}
+
+function generate_json($db) {
+    $result = $db->query("
+select
+    a.is_milling,
+    a.action_date,
+    ss.points,
+    a.borough,
+    a.on_street,
+    a.from_street,
+    a.to_street
+from actions a
+left join corrections c
+    on  (a.borough     = c.borough     or c.borough is null)
+    and (a.on_street   = c.on_street   or c.on_street is null)
+    and (a.from_street = c.from_street or c.from_street is null)
+    and (a.to_street   = c.to_street   or c.to_street is null)
+left join street_stretches ss
+    on  coalesce(c.new_borough,     a.borough    ) = ss.borough
+    and coalesce(c.new_on_street,   a.on_street  ) = ss.on_street
+    and coalesce(c.new_from_street, a.from_street) = ss.from_street
+    and coalesce(c.new_to_street,   a.to_street  ) = ss.to_street
+    and coalesce(c.from_direction, '') = ss.from_direction
+    and coalesce(c.to_direction, '') = ss.to_direction
+order by a.is_milling desc, a.action_date");
+    echo '[';
+    $once = true;
+    while (($row = $result->fetchArray(SQLITE3_ASSOC)) !== false) {
+        if ($once) {
+            $once = false;
+        } else {
+            echo ",\n";
+        }
+        $row['points'] = json_decode($row['points']);
+        echo json_encode($row);
+    }
+    echo ']';
+}
+
+function list_corrections($db) {
+    $result = $db->query('
+select
+    ss.borough,
+    ss.on_street,
+    ss.from_street,
+    ss.to_street,
+    c.borough     as new_borough,
+    c.on_street   as new_on_street,
+    c.from_street as new_from_street,
+    c.to_street   as new_to_street,
+    c.from_direction,
+    c.to_direction,
+    case when ss.points like \'{%\' then ss.points else null end as error
+from street_stretches ss
+left join corrections c
+    on  (ss.borough     = c.borough     or c.borough is null)
+    and (ss.on_street   = c.on_street   or c.on_street is null)
+    and (ss.from_street = c.from_street or c.from_street is null)
+    and (ss.to_street   = c.to_street   or c.to_street is null)
+order by ss.borough');
+    echo '[';
+    $once = true;
+    while (($row = $result->fetchArray(SQLITE3_ASSOC)) !== false) {
+        if ($once) {
+            $once = false;
+        } else {
+            echo ",\n";
+        }
+        $e = json_decode($row['error']);
+        unset($row['error']);
+        if (!empty($e)) {
+            $row['error_code'] = $e->error_code;
+            $row['error_message'] = $e->error_message;
+        }
+        echo json_encode($row);
+    }
+    echo ']';
+}
+
+if (isset($_GET['update'])) {
+    header('Content-Type: text/plain');
+    fetch_updates($db);
+    $new_actions = parse_schedules($db, false);
+    echo "added $new_actions actions\n";
+    add_street_stretches($db);
+}
+
+if (isset($_GET['json'])) {
+    header('Content-Type: application/json'); 
+    generate_json($db);
+}
+if (isset($_GET['corrections'])) {
+    header('Content-Type: application/json');
+    list_corrections($db);
+}
+
+$db->close();

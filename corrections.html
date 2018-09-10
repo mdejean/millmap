@@ -1,0 +1,115 @@
+<!doctype html>
+<html>
+<head>
+ <script src="json_table.js"></script>
+ <style type='text/css'>
+html, body, tr, td, th {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    font-size: 100%;
+    vertical-align: baseline;
+    font: menu;
+}
+table input, table select {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    font: menu;
+    font-size: 12px;
+    background-color: transparent;
+    border: 1px inset #888;
+}
+tr:nth-child(even) {
+    background-color: #ccc;
+}
+
+td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+ </style>
+ <script>
+function create_select(a) {
+    let ret = document.createElement('select');
+    for (let i = 0; i < a.length; i++) {
+        let opt = document.createElement('option'); 
+        opt.value = i;
+        opt.appendChild(document.createTextNode(a[i]));
+        ret.appendChild(opt);
+    }
+    return ret;
+}
+var borough_select_element = create_select(['', 'Manhattan', 'Bronx', 'Brooklyn', 'Queens', 'Staten Island']);
+var direction_select_element = create_select(['', 'N', 'E', 'S', 'W']);
+var input_element = document.createElement('input');
+input_element.type = 'text';
+input_element.style = 'min-width: 0;';
+
+function input(column) {
+    return (v) => {
+        let e = input_element.cloneNode(false);
+        e.name = column;
+        e.value = v;
+        return e;
+    };
+}
+
+function borough_select(column) {
+    return (v) => {
+        let e = borough_select_element.cloneNode(true);
+        e.name = column;
+        e.selectedIndex = v;
+        return e;
+    }
+}
+
+var corrections = [];
+
+function regenerate() {
+    formatters = {
+        borough: borough_select('borough'),
+        on_street:       input('on_street'      ),
+        from_street:     input('from_street'    ),
+        to_street:       input('to_street'      ),
+        new_borough: borough_select('new_borough'),
+        new_on_street:   input('new_on_street'  ),
+        new_from_street: input('new_from_street'),
+        new_to_street:   input('new_to_street'  )
+    };
+    let table = buildHtmlTable(
+        corrections.filter((row) =>
+            (document.getElementById('all').checked || row['error_code'])
+            && (document.getElementById('corrected').checked || 
+                !(row['new_borough'] 
+                  || row['new_on_street'] 
+                  || row['new_from_street'] 
+                  || row['new_to_street']
+                )
+            )),
+        formatters);
+    let e = document.getElementById('corrections');
+    e.innerHTML = '';
+    e.appendChild(table);
+}
+
+fetch('index.php?corrections').then(function(response) {
+    response.json().then(function(content) {
+        corrections = content;
+        regenerate();
+    });
+});
+window.addEventListener('load', function() {
+    document.getElementById('all').addEventListener('change', regenerate);
+    document.getElementById('corrected').addEventListener('change', regenerate);
+});
+ </script>
+</head>
+<body>
+<div id=options>
+<label>Show valid stretches<input type=checkbox id=all checked></label>
+<label>Show corrected entries<input type=checkbox id=corrected checked></label>
+<div id="corrections"></div>
+</body>
+</html>
