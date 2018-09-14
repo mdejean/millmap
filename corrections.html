@@ -7,19 +7,50 @@ html, body, tr, td, th {
     margin: 0;
     padding: 0;
     border: 0;
-    font-size: 100%;
-    vertical-align: baseline;
     font: menu;
+    font-size: 12px;
+    vertical-align: top;
 }
+
+td {
+    padding: 1pt;
+}
+
 table input, table select {
     margin: 0;
     padding: 0;
-    width: 100%;
-    font: menu;
-    font-size: 12px;
     background-color: transparent;
     border: 1px inset #888;
+    height: 16px;
+    vertical-align: top;
 }
+
+table select {
+    height: 18px;
+}
+
+td > * {
+    display: block;
+}
+
+table input, table select {
+    width: 100%;
+}
+
+table input ~ select {
+    display: inline-block;
+    width: calc(20% - 2pt);
+}
+
+table input:last-of-type:not(:last-child) {
+    display: inline-block;
+    width: 80%;
+}
+
+table button {
+    border: 1px solid black;
+}
+
 tr:nth-child(even) {
     background-color: #ccc;
 }
@@ -29,11 +60,12 @@ td {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
  </style>
  <script>
 function create_select(a) {
     let ret = document.createElement('select');
-    for (let i = 0; i < a.length; i++) {
+    for (let i in a) {
         let opt = document.createElement('option'); 
         opt.value = i;
         opt.appendChild(document.createTextNode(a[i]));
@@ -42,55 +74,199 @@ function create_select(a) {
     return ret;
 }
 var borough_select_element = create_select(['', 'Manhattan', 'Bronx', 'Brooklyn', 'Queens', 'Staten Island']);
-var direction_select_element = create_select(['', 'N', 'E', 'S', 'W']);
+var direction_select_element = create_select({"" : "", "N" : "N" , "E": "E", "S": "S", "W": "W"});
 var input_element = document.createElement('input');
 input_element.type = 'text';
-input_element.style = 'min-width: 0;';
+var hidden_element = document.createElement('input');
+hidden_element.type = 'hidden';
+
+borough_select_element.disabled = true;
+direction_select_element.disabled = true;
+input_element.disabled = true;
+
+
+function edit_td() {
+    let form = document.getElementById('cform');
+    let td = document.createElement('td');
+    
+    function start() {
+        let tr = td.parentElement;
+        //enable the other fields and associate them with the form
+        for (let e of tr.getElementsByTagName("*")) {
+            if (e.name) {
+                e.setAttribute('form', form.id);
+                e.disabled = false;
+            }
+        }
+        
+        //disable edit buttons
+        for (let e of document.getElementsByClassName('edit_button')) {
+            e.disabled = true;
+        }
+        
+        edit.style.display = 'none';
+        save.style.display = 'block';
+        cancel.style.display = 'block';
+    }
+    
+    function end() {
+        let tr = td.parentElement;
+        //disable the other fields and remove the form association
+        for (let e of tr.getElementsByTagName("*")) {
+            if (e.name) {
+                e.setAttribute('form', '');
+                e.disabled = true;
+            }
+        }
+        
+        //enable edit buttons
+        for (let e of document.getElementsByClassName('edit_button')) {
+            e.disabled = false;
+        }
+        
+        edit.style.display = 'block';
+        save.style.display = 'none';
+        cancel.style.display = 'none';
+    }
+    
+    let edit = document.createElement('button');
+    edit.class = "edit_button";
+    edit.innerHTML = "Edit";
+    edit.addEventListener('click', (event) => {
+        let tr = td.parentElement;
+        
+        //enable the other fields and associate them with the form
+        start();
+        
+        //copy over the values 
+        if (!form['rowid'].value) {
+            form['new_borough'].selectedIndex = form['borough'].selectedIndex;
+            for (let column of ['on_street', 'from_street', 'to_street']) {
+                form['new_' + column].value = form[column].value;
+            }
+        }
+    });
+    
+    let save = document.createElement('button');
+    save.innerHTML = "Save";
+    save.style.display = 'none';
+    save.addEventListener('click', (event) => {
+        let fd = new FormData(form);
+        fetch('index.php?add_correction', {
+            method: 'POST',
+            body: fd
+        }).then((response) => {
+            if (response.ok) {
+                td.parentElement.style.backgroundColor = '#8f8';
+                end();
+            }
+            response.text().then(console.log);
+        });
+    });
+    
+    let cancel = document.createElement('button');
+    cancel.innerHTML = "Cancel";
+    cancel.style.display = 'none';
+    cancel.addEventListener('click', (event) => {
+        //TODO: reset fields?
+        end();
+    });
+    
+    td.appendChild(edit);
+    td.appendChild(save);
+    td.appendChild(cancel);
+    return td;
+}
 
 function input(column) {
-    return (v) => {
+    return (row) => {
         let e = input_element.cloneNode(false);
         e.name = column;
-        e.value = v;
+        e.value = row[column];
         return e;
     };
 }
 
+function hidden(column) {
+    return (row) => {
+        let e = hidden_element.cloneNode(false);
+        e.name = column;
+        e.value = row[column];
+        return e;
+    };
+}
+    
+
 function borough_select(column) {
-    return (v) => {
+    return (row) => {
         let e = borough_select_element.cloneNode(true);
         e.name = column;
-        e.selectedIndex = v;
+        e.selectedIndex = row[column];
         return e;
+    }
+}
+
+function direction_select(column) {
+    return (row) => {
+        let e = direction_select_element.cloneNode(true);
+        e.name = column;
+        for (let option of e.children) {
+            if (option.value == row[column]) {
+                option.selected = true;
+            }
+        }
+        return e;
+    }
+}
+
+function text(column) {
+    return (row) => {
+        return document.createTextNode(row[column] || '');
     }
 }
 
 var corrections = [];
 
 function regenerate() {
-    formatters = {
-        borough: borough_select('borough'),
-        on_street:       input('on_street'      ),
-        from_street:     input('from_street'    ),
-        to_street:       input('to_street'      ),
-        new_borough: borough_select('new_borough'),
-        new_on_street:   input('new_on_street'  ),
-        new_from_street: input('new_from_street'),
-        new_to_street:   input('new_to_street'  )
-    };
-    let table = buildHtmlTable(
-        corrections.filter((row) =>
-            (document.getElementById('all').checked || row['error_code'])
-            && (document.getElementById('corrected').checked || 
-                !(row['new_borough'] 
-                  || row['new_on_street'] 
-                  || row['new_from_street'] 
-                  || row['new_to_street']
-                )
-            )),
-        formatters);
     let e = document.getElementById('corrections');
     e.innerHTML = '';
+    
+    let filtered = corrections.filter((row) =>
+            (document.getElementById('all').checked || row['error_code'])
+            && (document.getElementById('corrected').checked || !(row['rowid']))
+            );
+    let table = document.createElement('table');
+    for (let row of filtered) {
+        let tr = document.createElement('tr');
+        
+        tr.appendChild(edit_td());
+        tr.appendChild(hidden('rowid')(row));
+        
+        for (let column of ['borough', 'on_street', 'from_street', 'to_street']) {
+            let td = document.createElement('td');
+            let f = input;
+            if (column == 'borough') f = borough_select;
+            td.appendChild(f(column)(row));
+            td.appendChild(f('new_' + column)(row));
+            if (column == 'from_street') {
+                td.appendChild(direction_select('from_direction')(row));
+            } else if (column == 'to_street') {
+                td.appendChild(direction_select('to_direction')(row));
+            }
+            tr.appendChild(td);
+        }
+        
+        let td = document.createElement('td');
+        if (row['error_code']) {
+            td.appendChild(text('error_code')(row));
+            td.appendChild(document.createTextNode(": "));
+            td.appendChild(text('error_message')(row));
+        }
+        tr.appendChild(td);
+        
+        table.appendChild(tr);
+    }
+    
     e.appendChild(table);
 }
 
@@ -110,6 +286,8 @@ window.addEventListener('load', function() {
 <div id=options>
 <label>Show valid stretches<input type=checkbox id=all checked></label>
 <label>Show corrected entries<input type=checkbox id=corrected checked></label>
+</div>
 <div id="corrections"></div>
+<form id="cform"></form>
 </body>
 </html>

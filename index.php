@@ -133,7 +133,7 @@ function parse_schedule($db, $s, $start_date) {
             $q->bindValue(':action_date', $action_date);
             $q->bindValue(':is_milling', $is_milling);
             $q->bindValue(':borough', $borough);
-            $q->bindValue(':on_street', $on_street);
+            $q->bindValue(':on_street', trim($on_street)); //TODO: fix regex to not include whitespace
             $q->bindValue(':from_street', $from_street);
             $q->bindValue(':to_street', $to_street);
             $q->bindValue(':sa', $sa);
@@ -232,30 +232,46 @@ function add_street_stretches($db) {
     $valid = 0;
     $invalid = 0;
 
-    $street_stretches = $db->query('
+    $street_stretches = $db->query("
 select 
-    a.borough, 
-    a.on_street, 
-    a.from_street, 
-    a.to_street 
+    coalesce(c.new_borough,     a.borough    ) borough       ,
+    coalesce(c.new_on_street,   a.on_street  ) on_street     ,
+    coalesce(c.new_from_street, a.from_street) from_street   ,
+    coalesce(c.new_to_street,   a.to_street  ) to_street     ,
+    coalesce(c.from_direction, '')             from_direction,
+    coalesce(c.to_direction, '')               to_direction  
 from actions a 
+left join corrections c
+    on  (a.borough     = c.borough     or c.borough is null)
+    and (a.on_street   = c.on_street   or c.on_street is null)
+    and (a.from_street = c.from_street or c.from_street is null)
+    and (a.to_street   = c.to_street   or c.to_street is null)
 left join street_stretches ss
-    on a.borough = ss.borough
-    and a.on_street = ss.on_street
-    and a.from_street = ss.from_street
-    and a.to_street = ss.to_street
-where ss.points is null');
+    on  coalesce(c.new_borough,     a.borough    ) = ss.borough
+    and coalesce(c.new_on_street,   a.on_street  ) = ss.on_street
+    and coalesce(c.new_from_street, a.from_street) = ss.from_street
+    and coalesce(c.new_to_street,   a.to_street  ) = ss.to_street
+    and coalesce(c.from_direction, '') = ss.from_direction
+    and coalesce(c.to_direction, '') = ss.to_direction
+where ss.points is null");
 
-    $add_ss = $db->prepare('insert into street_stretches (borough, on_street, from_street, to_street, points) values (:borough, :on_street, :from_street, :to_street, :points)');
+    $add_ss = $db->prepare('
+insert into street_stretches (borough, on_street, from_street, to_street, from_direction, to_direction, points) values (:borough, :on_street, :from_street, :to_street, :from_direction, :to_direction, :points)');
     while (($row = $street_stretches->fetchArray()) !== false) {
-        $out = exec('streetstretch ' . escapeshellarg($row['borough'])
+        $cmd = 'streetstretch ' . escapeshellarg($row['borough'])
             . ' ' . escapeshellarg($row['on_street']) 
             . ' ' . escapeshellarg($row['from_street']) 
-            . ' ' . escapeshellarg($row['to_street']));
+            . ' ' . escapeshellarg($row['to_street'])
+            . ' ' . escapeshellarg($row['from_direction']) 
+            . ' ' . escapeshellarg($row['to_direction']);
+        echo $cmd;
+        $out = exec($cmd);
         $add_ss->bindValue(':borough', $row['borough']);
         $add_ss->bindValue(':on_street', $row['on_street']);
         $add_ss->bindValue(':from_street', $row['from_street']);
         $add_ss->bindValue(':to_street', $row['to_street']);
+        $add_ss->bindValue(':from_direction', $row['from_direction']);
+        $add_ss->bindValue(':to_direction', $row['to_direction']);
         $add_ss->bindValue(':points', $out);
         $add_ss->execute();
         $add_ss->reset();
@@ -308,26 +324,39 @@ order by a.is_milling desc, a.action_date");
 }
 
 function list_corrections($db) {
-    $result = $db->query('
+    $result = $db->query("
 select
     ss.borough,
     ss.on_street,
     ss.from_street,
     ss.to_street,
-    c.borough     as new_borough,
-    c.on_street   as new_on_street,
-    c.from_street as new_from_street,
-    c.to_street   as new_to_street,
+    c.rowid,
+    c.new_borough,
+    c.new_on_street,
+    c.new_from_street,
+    c.new_to_street,
     c.from_direction,
     c.to_direction,
-    case when ss.points like \'{%\' then ss.points else null end as error
-from street_stretches ss
+    case when ss2.points like '{%' then ss2.points else null end as error
+from (select distinct
+    borough,
+    on_street,
+    from_street,
+    to_street
+    from actions a) ss
 left join corrections c
     on  (ss.borough     = c.borough     or c.borough is null)
     and (ss.on_street   = c.on_street   or c.on_street is null)
     and (ss.from_street = c.from_street or c.from_street is null)
     and (ss.to_street   = c.to_street   or c.to_street is null)
-order by ss.borough');
+left join street_stretches ss2
+    on  coalesce(c.new_borough,     ss.borough    ) = ss2.borough
+    and coalesce(c.new_on_street,   ss.on_street  ) = ss2.on_street
+    and coalesce(c.new_from_street, ss.from_street) = ss2.from_street
+    and coalesce(c.new_to_street,   ss.to_street  ) = ss2.to_street
+    and coalesce(c.from_direction, '') = ss2.from_direction
+    and coalesce(c.to_direction, '') = ss2.to_direction
+order by ss.borough");
     echo '[';
     $once = true;
     while (($row = $result->fetchArray(SQLITE3_ASSOC)) !== false) {
@@ -363,5 +392,49 @@ if (isset($_GET['corrections'])) {
     header('Content-Type: application/json');
     list_corrections($db);
 }
+
+if (isset($_GET['add_correction'])) {
+    $columns = [
+        'borough',
+        'on_street',
+        'from_street', 
+        'to_street',
+        'new_borough',
+        'new_on_street',
+        'new_from_street', 
+        'new_to_street',
+        'from_direction',
+        'to_direction'];
+    
+    $q = null;
+    if (!empty($_POST['rowid'])) {
+        $q = $db->prepare('update corrections set ' 
+            . implode(',', array_map(function($v) {return $v . ' = :' . $v;}, $columns))
+            . ' where rowid = :rowid');
+        $q->bindValue(':rowid', $_POST['rowid']);
+    } else {
+        $q = $db->prepare(
+            'insert into corrections (' 
+            . implode(',', $columns) 
+            . ') values (' 
+            . implode(',', array_map(function($v) {return ':' . $v;}, $columns)) 
+            . ')');
+    }
+    
+    foreach ($columns as $column) {
+        if (isset($_POST[$column])) {
+            $q->bindValue(':' . $column, $_POST[$column]);
+        } else {
+            $q->bindValue(':' . $column, '');
+        }
+    }
+
+    if (!$q->execute()) {
+        http_response_code(500);
+    }
+    
+    add_street_stretches($db);
+}
+
 
 $db->close();
