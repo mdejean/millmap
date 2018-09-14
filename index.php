@@ -181,6 +181,7 @@ function fetch_updates($db) {
             preg_match("/Milling & Paving Schedule\n(.*)/", $text, $match);
             if (isset($match[1])) {
                 $dates = explode(' to ', $match[1]); 
+                date_default_timezone_set('America/New_York');
                 $start_date = strtotime($dates[0]);
                 $end_date = strtotime($dates[1]);
             }
