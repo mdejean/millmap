@@ -38,7 +38,7 @@ create table actions (
     sa text,
     community_board int,
     neighborhood text,
-    primary key (action_date, borough, on_street, from_street, to_street)
+    primary key (action_date, is_milling, borough, on_street, from_street, to_street)
 ) without rowid');
     $db->exec('
 create table street_stretches (
@@ -65,9 +65,7 @@ create table corrections (
     to_direction text)');
     foreach ($tables as $t) {
         $columns = array_keys($db->querySingle("select * from old_$t limit 1", true));
-        $q = "insert into $t (" . implode(",", $columns) . ") select * from old_$t";
-        echo $q;
-        $success = $db->exec($q);
+        $success = $db->exec("insert into $t (" . implode(",", $columns) . ") select * from old_$t");
         if (!$success) break;
     }
     if ($success) {
@@ -382,6 +380,12 @@ if (isset($_GET['update'])) {
     fetch_updates($db);
     $new_actions = parse_schedules($db, false);
     echo "added $new_actions actions\n";
+    add_street_stretches($db);
+}
+
+if (isset($_GET['reparse'])) {
+    $new_actions = parse_schedules($db, true);
+    //$db->exec("delete from street_stretches");
     add_street_stretches($db);
 }
 
