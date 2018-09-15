@@ -120,6 +120,7 @@ fetch('index.php?json').then(function(response) {
                 errors.push(a);
             } else {
                 for (let i = 0; i < action.points.length - 1; i++) {
+                    if ('gap' in action.points[i+1]) continue;
                     if (action.points[i] < action.points[i+1]) {
                         p1 = action.points[i];
                         p2 = action.points[i+1];
