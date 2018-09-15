@@ -95,7 +95,10 @@ int main(int argc, char** argv) {
         for (int i = 0; i < cross_strs_len; i++) {
             struct coord c = intersection_coord(wa2.cross_strs[i].node_nbr);
             if (memcmp(c.x, "       ", 7) == 0) continue;
-            printf("{\"x\": \"%.7s\", \"y\": \"%.7s\"}", c.x, c.y);
+            printf("{\"x\": \"%.7s\", \"y\": \"%.7s\"%s}", 
+                c.x, 
+                c.y, 
+                wa2.cross_strs[i].gap_flag == 'N' ? ", \"gap\": true" : "");
             if (i == cross_strs_len - 1) {
                 printf("]");
             } else {
@@ -103,7 +106,9 @@ int main(int argc, char** argv) {
             }
         }
     } else {
-         printf("{\"error_code\": \"%c%c\", \"error_message\": \"%.80s\"}",wa1.output.ret_code[1],wa1.output.ret_code[0],wa1.output.msg);
+         printf("{\"error_code\": \"%c%c\", \"error_message\": \"%.80s\"}",
+            wa1.output.ret_code[1], wa1.output.ret_code[0],
+            wa1.output.msg);
     }
     
     return 0;
