@@ -389,12 +389,21 @@ if (isset($_GET['reparse'])) {
     add_street_stretches($db);
 }
 
-if (isset($_GET['json'])) {
+if (isset($_GET['actions'])) {
     header('Content-Type: application/json'); 
     generate_json($db);
 }
+
+if (isset($argv[1]) and $argv[1] == 'actions') {
+    generate_json($db);
+}
+
 if (isset($_GET['corrections'])) {
     header('Content-Type: application/json');
+    list_corrections($db);
+}
+
+if (isset($argv[1]) and $argv[1] == 'corrections') {
     list_corrections($db);
 }
 
@@ -440,6 +449,5 @@ if (isset($_GET['add_correction'])) {
     
     add_street_stretches($db);
 }
-
 
 $db->close();
