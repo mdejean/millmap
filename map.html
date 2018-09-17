@@ -6,7 +6,19 @@
     <script src="proj4.js"></script>
     <script src="json_table.js"></script>
     <style type='text/css'>
-#map { height: 800px; }
+html, body {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    font: menu;
+    vertical-align: top;
+}
+
+#map {
+    height: calc(100vh - 2em);
+}
+
+
 .legend {
     width: 20em;
     padding: 6px 8px;
@@ -34,11 +46,38 @@
 .dash {
     border-style: dashed;
 }
+
+#errors > input {
+    display: none;
+}
+
+#errors > label {
+    display: inline-block;
+    margin: 1px;
+}
+
+#errors > label::after { 
+    content: "Show/Hide";
+    -moz-appearance: button;
+    -webkit-appearance: button;
+}
+
+#errors > input + table {
+    display: none;
+}
+
+#errors > input:checked + table {
+    display: block;
+}
+
+tr:nth-child(even) {
+    background-color: #ccc;
+}
     </style>
 </head>
 <body>
  <div id="map"></div>
- <div id="errors">Errors this run:<br></div>
+ <div id="errors">Errors this run: <label for=show_errors></label><br><input id=show_errors type=checkbox></div>
  <script>
 proj4.defs('FIPS:3104','+proj=lcc +lat_1=40.66666666666666 +lat_2=41.03333333333333 +lat_0=40.16666666666666 +lon_0=-74 +x_0=300000 +y_0=0 +ellps=GRS80 +datum=NAD83 +to_meter=0.3048006096012192 +no_defs ');
 
