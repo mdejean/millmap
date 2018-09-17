@@ -98,7 +98,7 @@ function points_to_polyline(points) {
 
 
 options = {
-  year: 'numeric', month: 'short', day: 'numeric', weekday: 'long', timeZone: 'UTC'
+  year: 'numeric', month: 'short', day: 'numeric', weekday: 'short', timeZone: 'UTC'
 };
 var date_formatter = new Intl.DateTimeFormat('en-US', options);
 
@@ -107,23 +107,25 @@ function format_date(s) {
 }
 
 function popup(actions) {
-    let s = "";
+    let s = "<table>";
     for (let action of actions) {
-        s += format_date(action.action_date);
-        s += "<br>";
+        s += "<tr><td>";
         if (action.is_milling) {
             s += "<b>Milling</b>";
         } else {
             s += "<b>Paving</b>";
         }
-        s += "<br>";
+        s += "</td><td>";
+        s += format_date(action.action_date);
+        s += "</td><td>";
         s += action.on_street;
-        s += "<br>(";
+        s += "</td><td>(";
         s += action.from_street;
         s += " - ";
         s += action.to_street;
-        s += ") <br>";
+        s += ")</td></tr>";
     }
+    s += "</table>";
     return s;
 }
 
