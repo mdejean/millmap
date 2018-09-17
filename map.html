@@ -1,23 +1,42 @@
 <!doctype html>
 <html>
 <head>
+    <title>Milling &amp; Paving Map</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.4/dist/leaflet.css">
     <script src="https://unpkg.com/leaflet@1.3.4/dist/leaflet.js"></script>
     <script src="proj4.js"></script>
     <script src="json_table.js"></script>
     <style type='text/css'>
 html, body {
-    margin: 0;
-    padding: 0;
-    border: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
     font: menu;
     vertical-align: top;
 }
 
-#map {
-    height: calc(100vh - 2em);
+
+html, body, div, span, applet, object, iframe,
+h1, h2, h3, h4, h5, h6, p, blockquote, pre,
+a, abbr, acronym, address, big, cite, code,
+del, dfn, em, img, ins, kbd, q, s, samp,
+small, strike, strong, sub, sup, tt, var,
+b, u, i, center,
+dl, dt, dd, ol, ul, li,
+fieldset, form, label, legend,
+table, caption, tbody, tfoot, thead, tr, th, td,
+article, aside, canvas, details, embed, 
+figure, figcaption, footer, header, hgroup, 
+menu, nav, output, ruby, section, summary,
+time, mark, audio, video {
+    margin: 0;
+    padding: 0;
+    border: 0;
 }
 
+#map {
+    flex: 1;
+}
 
 .legend {
     width: 20em;
@@ -76,6 +95,7 @@ tr:nth-child(even) {
     </style>
 </head>
 <body>
+ <h1>Milling &amp; Paving through September 22, 2018</h1>
  <div id="map"></div>
  <div id="errors">Errors this run: <label for=show_errors></label><br><input id=show_errors type=checkbox></div>
  <script>
