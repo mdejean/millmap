@@ -62,6 +62,9 @@ time, mark, audio, video {
 .red {
     border-color: red;
 }
+.purple {
+    border-color: #a0f;
+}
 .dash {
     border-style: dashed;
 }
@@ -91,6 +94,10 @@ time, mark, audio, video {
 
 tr:nth-child(even) {
     background-color: #ccc;
+}
+
+.tiles {
+    filter: saturate(70%);
 }
     </style>
 </head>
@@ -156,7 +163,7 @@ legend.onAdd = (map) => {
     let div = L.DomUtil.create('div', 'legend');
     div.innerHTML += "<div><div class='line red dash'></div>Milling later this week</div>"
     div.innerHTML += "<div><div class='line red'></div>Milled street</div>"
-    div.innerHTML += "<div><div class='line blue dash'></div>Paving later this week</div>"
+    div.innerHTML += "<div><div class='line purple dash'></div>Paving later this week</div>"
     div.innerHTML += "<div><div class='line blue'></div>Recently paved street</div>"
     return div;
 };
@@ -164,7 +171,8 @@ legend.addTo(map);
 
 // add an OpenStreetMap tile layer
 L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
+    attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors',
+    className: 'tiles'
 }).addTo(map);
 
 var url = 'actions.json';
@@ -218,13 +226,13 @@ fetch(url).then(function(response) {
             let action = v.actions[0];
             
             if (action.is_milling && action.action_date >= Date.now()/1000) {
-                line.setStyle({weight: 1, color: 'red', dashArray: '1 10'});
+                line.setStyle({weight: 2, color: '#f00', dashArray: '1 10'});
             } else if (action.is_milling) {
-                line.setStyle({weight: 1, color: 'red'});
+                line.setStyle({weight: 2, color: '#f00'});
             } else if (action.action_date >= Date.now()/1000) {
-                line.setStyle({weight: 1, color: 'blue', dashArray: '1 10'});
+                line.setStyle({weight: 2, color: '#a0f', dashArray: '1 10'});
             } else {
-                line.setStyle({weight: 1, color: 'blue'});
+                line.setStyle({weight: 2, color: '#00f'});
             }
             
             line.bindPopup(popup(v.actions));
@@ -249,9 +257,9 @@ map.on('zoomend', function() {
         if (map.getZoom() > 15) {
             layer.setStyle({weight: Math.pow(2, map.getZoom()) / 1.5e6 * 50});
         } else if (map.getZoom() > 12) {
-            layer.setStyle({weight: 2});
+            layer.setStyle({weight: 3});
         } else {
-            layer.setStyle({weight: 1});
+            layer.setStyle({weight: 2});
         }
     });
 });
