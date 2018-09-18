@@ -3,84 +3,6 @@ ini_set('html_errors', 0);
 
 $db = new SQLite3('millmap.sqlite');
 
-if (isset($_GET['update_schema'])) {
-    header('Content-Type: text/plain');
-    $success = true;
-    $tables = ['schedules', 'actions', 'street_stretches', 'corrections'];
-    foreach ($tables as $t) {
-        $success = $db->exec("alter table $t rename to old_$t;");
-        if (!$success) {
-            break;
-        }
-    }
-    if (!$success) {
-        die("wtf");
-    }
-    $db->exec('
-create table schedules (
-    url text, 
-    access_date int, 
-    file blob, 
-    converted_text text, 
-    start_date int, 
-    end_date int, 
-    processed int not null default 0,
-    primary key (url, access_date)
-) without rowid');
-    $db->exec('
-create table actions (
-    action_date int, 
-    is_milling int, 
-    borough int,
-    on_street text,
-    from_street text, 
-    to_street text,
-    sa text,
-    community_board int,
-    neighborhood text,
-    primary key (action_date, is_milling, borough, on_street, from_street, to_street)
-) without rowid');
-    $db->exec('
-create table street_stretches (
-    borough int,
-    on_street text,
-    from_street text, 
-    to_street text,
-    from_direction text not null default \'\',
-    to_direction text not null default \'\',
-    points text,
-    primary key (borough, on_street, from_street, to_street, from_direction, to_direction)
-) without rowid');
-    $db->exec('
-create table corrections (
-    borough int,
-    on_street text,
-    from_street text, 
-    to_street text,
-    new_borough int,
-    new_on_street text,
-    new_from_street text, 
-    new_to_street text,
-    from_direction text,
-    to_direction text)');
-    foreach ($tables as $t) {
-        $columns = array_keys($db->querySingle("select * from old_$t limit 1", true));
-        $success = $db->exec("insert into $t (" . implode(",", $columns) . ") select * from old_$t");
-        if (!$success) break;
-    }
-    if ($success) {
-        foreach ($tables as $t) {
-            $db->exec("drop table old_$t");
-        }
-        echo "schema update succeeded";
-    } else {
-        foreach ($tables as $t) {
-            $db->exec("drop table $t; alter table old_$t rename to $t;");
-        }
-        echo "schema update failed";
-    }
-}
-
 function get_last_date($db, $url) {
     $q = $db->prepare('select max(access_date) last_date from schedules where url = :url');
     $q->bindValue(':url', $url);
@@ -375,7 +297,12 @@ order by ss.borough");
     echo ']';
 }
 
-if (isset($_GET['update'])) {
+function cmd($k) {
+    global $argv;
+    return isset($_GET[$k]) or (isset($argv[1]) and $argv[1] == $k);
+}
+
+if (cmd('update')) {
     header('Content-Type: text/plain');
     fetch_updates($db);
     $new_actions = parse_schedules($db, false);
@@ -383,27 +310,19 @@ if (isset($_GET['update'])) {
     add_street_stretches($db);
 }
 
-if (isset($_GET['reparse'])) {
+if (cmd('reparse')) {
     $new_actions = parse_schedules($db, true);
     //$db->exec("delete from street_stretches");
     add_street_stretches($db);
 }
 
-if (isset($_GET['actions'])) {
+if (cmd('actions')) {
     header('Content-Type: application/json'); 
     generate_json($db);
 }
 
-if (isset($argv[1]) and $argv[1] == 'actions') {
-    generate_json($db);
-}
-
-if (isset($_GET['corrections'])) {
+if (cmd('corrections')) {
     header('Content-Type: application/json');
-    list_corrections($db);
-}
-
-if (isset($argv[1]) and $argv[1] == 'corrections') {
     list_corrections($db);
 }
 
@@ -448,6 +367,84 @@ if (isset($_GET['add_correction'])) {
     }
     
     add_street_stretches($db);
+}
+
+if (cmd('update_schema')) {
+    header('Content-Type: text/plain');
+    $success = true;
+    $tables = ['schedules', 'actions', 'street_stretches', 'corrections'];
+    foreach ($tables as $t) {
+        $success = $db->exec("alter table $t rename to old_$t;");
+        if (!$success) {
+            break;
+        }
+    }
+    if (!$success) {
+        die("wtf");
+    }
+    $db->exec('
+create table schedules (
+    url text, 
+    access_date int, 
+    file blob, 
+    converted_text text, 
+    start_date int, 
+    end_date int, 
+    processed int not null default 0,
+    primary key (url, access_date)
+) without rowid');
+    $db->exec('
+create table actions (
+    action_date int, 
+    is_milling int, 
+    borough int,
+    on_street text,
+    from_street text, 
+    to_street text,
+    sa text,
+    community_board int,
+    neighborhood text,
+    primary key (action_date, is_milling, borough, on_street, from_street, to_street)
+) without rowid');
+    $db->exec('
+create table street_stretches (
+    borough int,
+    on_street text,
+    from_street text, 
+    to_street text,
+    from_direction text not null default \'\',
+    to_direction text not null default \'\',
+    points text,
+    primary key (borough, on_street, from_street, to_street, from_direction, to_direction)
+) without rowid');
+    $db->exec('
+create table corrections (
+    borough int,
+    on_street text,
+    from_street text, 
+    to_street text,
+    new_borough int,
+    new_on_street text,
+    new_from_street text, 
+    new_to_street text,
+    from_direction text,
+    to_direction text)');
+    foreach ($tables as $t) {
+        $columns = array_keys($db->querySingle("select * from old_$t limit 1", true));
+        $success = $db->exec("insert into $t (" . implode(",", $columns) . ") select * from old_$t");
+        if (!$success) break;
+    }
+    if ($success) {
+        foreach ($tables as $t) {
+            $db->exec("drop table old_$t");
+        }
+        echo "schema update succeeded";
+    } else {
+        foreach ($tables as $t) {
+            $db->exec("drop table $t; alter table old_$t rename to $t;");
+        }
+        echo "schema update failed";
+    }
 }
 
 $db->close();
