@@ -75,7 +75,7 @@ time, mark, audio, video {
 
 #errors > label {
     display: inline-block;
-    margin: 1px;
+    margin: 2px;
 }
 
 #errors > label::after { 
@@ -99,12 +99,19 @@ tr:nth-child(even) {
 .tiles {
     filter: saturate(70%);
 }
+
+#me {
+    float: right;
+}
     </style>
 </head>
 <body>
  <h1>Milling &amp; Paving through September 22, 2018</h1>
  <div id="map"></div>
- <div id="errors">Errors this run: <label for=show_errors></label><br><input id=show_errors type=checkbox></div>
+ <div>
+     <div id="me"><a href="https://mdejean.github.io">please give me a job</a></div>
+     <div id="errors">Errors this run: <label for=show_errors></label><br><input id=show_errors type=checkbox></div>
+ </div>
  <script>
 proj4.defs('FIPS:3104','+proj=lcc +lat_1=40.66666666666666 +lat_2=41.03333333333333 +lat_0=40.16666666666666 +lon_0=-74 +x_0=300000 +y_0=0 +ellps=GRS80 +datum=NAD83 +to_meter=0.3048006096012192 +no_defs ');
 
