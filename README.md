@@ -1,13 +1,14 @@
 # NYC street milling & paving map generator
 
 <img src='https://mdejean.github.io/millmap.png'>
+
 [View the map](https://mdejean.github.io/millmap/map.html)
 
 This is based on the milling and paving [schedules](http://www.nyc.gov/html/dot/html/motorist/resurfintro.shtml) put out by NYCDOT. The
 schedules are not comprehensive and there are sometimes actions missing 
 entirely. Not everything goes to schedule, too.
 
-##Installation
+## Installation
 
 Requirements:
 
