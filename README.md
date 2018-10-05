@@ -24,3 +24,10 @@ Steps:
 * Download the latest schedules `localhost:8080/?update`
 * Correct the many errors `localhost:8080/corrections.html`. [GOAT](http://a030-goat.nyc.gov/goat/f3s.aspx) will help.
 * View the map `localhost:8080/map.html`
+
+TODO:
+
+* Hide paved streets after a few months
+* Integrate [street closures feed](https://data.cityofnewyork.us/Transportation/Street-Closures-due-to-construction-activities-by-/i6b5-j7bu), which may have better data 
+* Use weather history to predict whether paving actually happened
+* Crowdsource corrections?
