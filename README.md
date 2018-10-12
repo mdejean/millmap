@@ -14,6 +14,7 @@ Requirements:
 
 * PHP 7+
 * [Geosupport Desktop Edition](https://www1.nyc.gov/site/planning/data-maps/open-data/dwn-gde-home.page)
+* [tet.exe](https://www.pdflib.com/download/tet/)
 * A C compiler
 
 Steps:
@@ -31,3 +32,4 @@ TODO:
 * Integrate [street closures feed](https://data.cityofnewyork.us/Transportation/Street-Closures-due-to-construction-activities-by-/i6b5-j7bu), which may have better data 
 * Use weather history to predict whether paving actually happened
 * Crowdsource corrections?
+* Eliminate TET dependency
