@@ -185,8 +185,8 @@ insert into street_stretches (borough, on_street, from_street, to_street, from_d
             . ' ' . escapeshellarg($row['to_street'])
             . ' ' . escapeshellarg($row['from_direction']) 
             . ' ' . escapeshellarg($row['to_direction']);
-        echo $cmd;
         $out = exec($cmd);
+        
         $add_ss->bindValue(':borough', $row['borough']);
         $add_ss->bindValue(':on_street', $row['on_street']);
         $add_ss->bindValue(':from_street', $row['from_street']);
