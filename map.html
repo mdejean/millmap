@@ -106,10 +106,10 @@ tr:nth-child(even) {
     </style>
 </head>
 <body>
- <h1>Milling &amp; Paving through January 1st, 2019</h1>
+ <h1>Milling &amp; Paving through April 21st, 2019</h1>
  <div id="map"></div>
  <div>
-     <div id="me"><a href="https://mdejean.github.io">looking for work</a></div>
+     <div id="me">Milling &amp; Paving has started for 2019! I missed several weeks of actions. Still <a href="https://mdejean.github.io">looking for work</a></div>
      <div id="errors">Errors this run: <label for=show_errors></label><br><input id=show_errors type=checkbox></div>
  </div>
  <script>
@@ -231,6 +231,11 @@ fetch(url).then(function(response) {
             let line = points_to_polyline(v.points);
             v.actions.sort((a, b) => b.action_date - a.action_date);
             let action = v.actions[0];
+            
+            //don't show streets that haven't been touched in the last 150 days
+            if (action.action_date <= Date.now()/1000 - 24*60*60*150) {
+                continue;
+            }
             
             if (action.is_milling && action.action_date >= Date.now()/1000) {
                 line.setStyle({weight: 2, color: '#f00', dashArray: '1 10'});
