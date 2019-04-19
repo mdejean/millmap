@@ -14,12 +14,14 @@ function get_last_date($db, $url) {
 
 function pdf_to_text($pdf) {
     $file = tmpfile();
+    $output = tempnam(sys_get_temp_dir(), "MIL");
     fwrite($file, $pdf);
     fseek($file, 0);
-    $p = exec('tet -o - -- ' . stream_get_meta_data($file)['uri'], $text);
+    $p = exec("mutool convert -F text -o " . escapeshellarg($output) . " " . escapeshellarg(stream_get_meta_data($file)['uri']));
     fclose($file);
-    //TET outputs \x0C for page breaks
-    return str_replace("\x0C", "\n", implode("\n", $text));
+    $text = file_get_contents($output);
+    unlink($output);
+    return $text;
 }
 
 function parse_schedule($db, $s, $start_date) {
@@ -32,30 +34,37 @@ function parse_schedule($db, $s, $start_date) {
     $action_date = null;
     $is_milling = null;
     
+    //start by searching the document for the borough, because somehow it's not ending up at the top
+    foreach ($boroughs as $k => $v) {
+        if (preg_match('/\n\s*' . $k . '\s*\n/', $s)) {
+            $borough = $v;
+        }
+    }
+    
     foreach (explode("\n", $s) as $line) {
         $line = trim($line, " \t\r\n\xef\xbb\xbf\0");
-        
+
         if (isset($boroughs[$line])) {
             $borough = $boroughs[$line];
         } elseif (isset($weekdays[$line])) {
             $action_date = $start_date + $weekdays[$line] * (60 * 60 * 24);
             $is_milling = null;
-        } elseif (stripos($line, 'paving crew') !== false) {
+        } elseif (stripos($line, 'paving') !== false) {
             $is_milling = false;
         } elseif (stripos($line, 'milling') !== false) {
             $is_milling = true;
-        } elseif (preg_match('/^(\d+-\d+-\d+)? ?([MQKXS][\d-]+)? ([^(]*)\((.*) (to|-) (.*)\) ?(- \w+)? ?(\d+)? ?(.*)?$/', $line, $match)) {
+        } elseif (preg_match('/^(\d+-\d+-\d+)? ?([MQKXS][\d-]+)? ?([^(]*)\((.*)( to | ?- ?)(.*)\) ?(- \w+)? ?(\d+)? ?(.*)?$/', $line, $match)) {
             //example: 7-26-18 M2018-08-17 Broadway (218th St to W 225th St Bridge) 12 Inwood
             list(            , $date,            $sa,            $on_street, $from_street, , $to_street, , $cb, $neighborhood) = $match;
-            
+
             $q = $db->prepare('insert into actions values (:action_date, :is_milling, :borough, :on_street, :from_street, :to_street, :sa, :cb, :neighborhood)');
             
             $q->bindValue(':action_date', $action_date);
             $q->bindValue(':is_milling', $is_milling);
             $q->bindValue(':borough', $borough);
             $q->bindValue(':on_street', trim($on_street)); //TODO: fix regex to not include whitespace
-            $q->bindValue(':from_street', $from_street);
-            $q->bindValue(':to_street', $to_street);
+            $q->bindValue(':from_street', trim($from_street));
+            $q->bindValue(':to_street', trim($to_street));
             $q->bindValue(':sa', $sa);
             $q->bindValue(':cb', $cb);
             $q->bindValue(':neighborhood', $neighborhood);
@@ -98,14 +107,14 @@ function fetch_updates($db) {
             
             $start_date = null;
             $end_date = null;
-            preg_match("/Milling & Paving Schedule\n(.*)/", $text, $match);
+            preg_match('/Milling & Paving Schedule\s?\n(.*)/', $text, $match);
             if (isset($match[1])) {
                 $dates = explode(' to ', $match[1]); 
                 date_default_timezone_set('America/New_York');
                 $start_date = strtotime($dates[0]);
                 $end_date = strtotime($dates[1]);
             }
-            
+
             $q = $db->prepare('insert into schedules values (:url, :access_date, :file, :text, :start_date, :end_date, 0)');
             $q->bindValue(':url', $url); 
             $q->bindValue(':access_date', time()); 
@@ -121,11 +130,25 @@ function fetch_updates($db) {
 
 function reconvert_schedules($db) {
     $schedules = $db->query('select url, access_date, file from schedules');
-    $q = $db->prepare('update schedules set converted_text = :text where url = :url and access_date = :access_date');
+    $q = $db->prepare('update schedules set converted_text = :text, start_date = :start, end_date = :end where url = :url and access_date = :access_date');
     while (($row = $schedules->fetchArray(SQLITE3_ASSOC)) !== false) {
         $text = pdf_to_text($row['file']);
+        
+        $start_date = null;
+        $end_date = null;
+        
+        preg_match('/Milling & Paving Schedule\s?\n(.*)/', $text, $match);
+        if (isset($match[1])) {
+            $dates = explode(' to ', $match[1]); 
+            date_default_timezone_set('America/New_York');
+            $start_date = strtotime($dates[0]);
+            $end_date = strtotime($dates[1]);
+        }
+
         $q->bindValue(':text', $text);
         $q->bindValue(':url', $row['url']);
+        $q->bindValue(':start', $start_date);
+        $q->bindValue(':end', $end_date);
         $q->bindValue(':access_date', $row['access_date']);
         $q->execute();
         $q->reset();
@@ -186,7 +209,7 @@ insert into street_stretches (borough, on_street, from_street, to_street, from_d
             . ' ' . escapeshellarg($row['from_direction']) 
             . ' ' . escapeshellarg($row['to_direction']);
         $out = exec($cmd);
-        
+
         $add_ss->bindValue(':borough', $row['borough']);
         $add_ss->bindValue(':on_street', $row['on_street']);
         $add_ss->bindValue(':from_street', $row['from_street']);
@@ -310,8 +333,13 @@ if (cmd('update')) {
     add_street_stretches($db);
 }
 
+if (cmd('reconvert')) {
+    reconvert_schedules($db);
+}
+
 if (cmd('reparse')) {
     $new_actions = parse_schedules($db, true);
+    echo "added $new_actions actions\n";
     //$db->exec("delete from street_stretches");
     add_street_stretches($db);
 }
