@@ -1,11 +1,18 @@
 // function prototype for NYCgeo
+#ifdef WIN32
 #include "NYCgeo.h"
+#else
+#include "geo.h"
+#define _GNU_SOURCE
+#include <dlfcn.h>
+#include <linux/limits.h>
+#endif
 // header file of Work Area layouts
 #include "pac.h"
 
-#include "stdio.h"
-#include "string.h"
-#include "stdlib.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 
  #define min(a,b) \
    ({ __typeof__ (a) _a = (a); \
@@ -15,6 +22,10 @@
    ({ __typeof__ (a) _a = (a); \
        __typeof__ (b) _b = (b); \
      _a > _b ? _a : _b; })
+   
+#ifndef WIN32
+#define NYCgeo geo
+#endif
 
 struct coord {
     char x[7];
@@ -54,6 +65,23 @@ int main(int argc, char** argv) {
         puts("must supply both from_street and to_street");
         return 1;
     }
+    
+#ifndef WIN32
+    Dl_info d = {};
+    if (dladdr(geo, &d)) {
+        char* last_sep;
+        last_sep = strrchr(d.dli_fname, '/');
+        if (last_sep) {
+            last_sep = (char*)memrchr(d.dli_fname, '/', last_sep - d.dli_fname);
+            if (last_sep && last_sep - d.dli_fname + 6 < PATH_MAX) {
+                char p[PATH_MAX] = {};
+                memcpy(p, d.dli_fname, last_sep - d.dli_fname);
+                strcpy(&p[last_sep - d.dli_fname], "/fls/");
+                setenv("GEOFILES", p, 0);
+            }
+        }
+    }
+#endif
     
     wa1.input.func_code[0] = '3';
     wa1.input.func_code[1] = 'S';
