@@ -106,10 +106,10 @@ tr:nth-child(even) {
     </style>
 </head>
 <body>
- <h1>Milling &amp; Paving through May 5th, 2019</h1>
+ <h1>Milling &amp; Paving through October 6th, 2019</h1>
  <div id="map"></div>
  <div>
-     <div id="me">Milling &amp; Paving has started for 2019! I missed several weeks of actions. Still <a href="https://mdejean.github.io">looking for work</a></div>
+     <div id="me">Still recovering from computer crash. Irregular updates. Still <a href="https://mdejean.github.io">looking for work</a></div>
      <div id="errors">Errors this run: <label for=show_errors></label><br><input id=show_errors type=checkbox></div>
  </div>
  <script>
@@ -183,10 +183,11 @@ L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 var url = 'actions.json';
-
 if (window.location.hostname == 'localhost') {
     url = 'index.php?actions';
 }
+
+const min_date = Date.now()/1000 - 24*60*60*150;
 
 fetch(url).then(function(response) {
     response.json().then(function(a) {
@@ -233,7 +234,7 @@ fetch(url).then(function(response) {
             let action = v.actions[0];
             
             //don't show streets that haven't been touched in the last 150 days
-            if (action.action_date <= Date.now()/1000 - 24*60*60*150) {
+            if (action.action_date <= min_date) {
                 continue;
             }
             
@@ -253,7 +254,7 @@ fetch(url).then(function(response) {
         lines.addTo(map);
         
         document.getElementById('errors').appendChild(
-            buildHtmlTable(errors, {
+            buildHtmlTable(errors.filter((e) => e.action_date > min_date), {
                     'action_date': d => document.createTextNode(format_date(d))
                 })
             );
