@@ -53,7 +53,7 @@ function parse_schedule($db, $s, $start_date) {
             $is_milling = false;
         } elseif (stripos($line, 'milling') !== false) {
             $is_milling = true;
-        } elseif (preg_match('/^(\d+-\d+-\d+)? ?([MQKXS][\d-]+)? ?([^(]*)\((.*)( to | ?- ?)(.*)\) ?(- \w+)? ?(\d+)? ?(.*)?$/', $line, $match)) {
+        } elseif (preg_match('/^(\d+-\d+-\d+)? ?([MQKXS][\d-]+)? ?([^(]*)\(([^)]*)( to | ?- ?)([^)]*)\)? ?(- \w+)? ?(\d+)? ?(.*)?$/', $line, $match)) {
             //example: 7-26-18 M2018-08-17 Broadway (218th St to W 225th St Bridge) 12 Inwood
             list(            , $date,            $sa,            $on_street, $from_street, , $to_street, , $cb, $neighborhood) = $match;
 
@@ -300,7 +300,7 @@ left join street_stretches ss2
     and coalesce(c.new_to_street,   ss.to_street  ) = ss2.to_street
     and coalesce(c.from_direction, '') = ss2.from_direction
     and coalesce(c.to_direction, '') = ss2.to_direction
-order by ss.borough");
+");
     echo '[';
     $once = true;
     while (($row = $result->fetchArray(SQLITE3_ASSOC)) !== false) {
