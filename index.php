@@ -205,7 +205,7 @@ left join street_stretches ss
 where ss.points is null");
 
     $add_ss = $db->prepare('
-insert into street_stretches (borough, on_street, from_street, to_street, from_direction, to_direction, points) values (:borough, :on_street, :from_street, :to_street, :from_direction, :to_direction, :points)');
+insert into street_stretches (borough, on_street, from_street, to_street, from_direction, to_direction, points, needs_trimming) values (:borough, :on_street, :from_street, :to_street, :from_direction, :to_direction, :points, :needs_trimming)');
     while (($row = $street_stretches->fetchArray()) !== false) {
         $cmd = './streetstretch ' . escapeshellarg($row['borough'])
             . ' ' . escapeshellarg($row['on_street']) 
@@ -214,6 +214,16 @@ insert into street_stretches (borough, on_street, from_street, to_street, from_d
             . ' ' . escapeshellarg($row['from_direction']) 
             . ' ' . escapeshellarg($row['to_direction']);
         $out = exec($cmd);
+        
+        // 66: streets intersect more than twice, cannot be processed
+        // add these as full length of street for manual processing
+        $needs_trimming = false;
+        
+        if (strpos($out, '{"error_code": "66"') === 0) {
+            $cmd = './streetstretch ' . escapeshellarg($row['borough']) . ' ' . escapeshellarg($row['on_street']);
+            $out = exec($cmd);
+            $needs_trimming = true;
+        }
 
         $add_ss->bindValue(':borough', $row['borough']);
         $add_ss->bindValue(':on_street', $row['on_street']);
@@ -222,6 +232,7 @@ insert into street_stretches (borough, on_street, from_street, to_street, from_d
         $add_ss->bindValue(':from_direction', $row['from_direction']);
         $add_ss->bindValue(':to_direction', $row['to_direction']);
         $add_ss->bindValue(':points', $out);
+        $add_ss->bindValue(':needs_trimming', $needs_trimming);
         $add_ss->execute();
         $add_ss->reset();
         if (strpos($out, "{") === 0) {
@@ -359,6 +370,56 @@ if (cmd('corrections')) {
     list_corrections($db);
 }
 
+if (cmd('to_trim')) {
+    header('Content-Type: application/json');
+    $result = $db->query("
+select
+    ss.borough,
+    ss.on_street,
+    ss.from_street,
+    ss.to_street,
+    ss.from_direction,
+    ss.to_direction,
+    ss.needs_trimming,
+    ss.points
+from street_stretches ss
+where ss.needs_trimming = 1");
+    echo '[';
+    $once = true;
+    while (($row = $result->fetchArray(SQLITE3_ASSOC)) !== false) {
+        if ($once) {
+            $once = false;
+        } else {
+            echo ",\n";
+        }
+        $row['points'] = json_decode($row['points']);
+        echo json_encode($row);
+    }
+    echo ']';
+}
+if (isset($_GET['trim'])) {
+    $columns = [
+        'borough',
+        'on_street',
+        'from_street', 
+        'to_street',
+        'from_direction',
+        'to_direction'];
+    $q = $db->prepare("update street_stretches set points = :points, needs_trimming = 0 where " 
+        . implode(" and ", 
+            array_map(function($v) {return $v . ' = :' . $v;}, $columns)
+          )
+        );
+    
+    $q->bindValue(":points", $_POST['points']);
+    foreach ($columns as $column) {
+        $q->bindValue(":$column", $_POST[$column]);
+    }
+    
+    if (!$q->execute()) {
+        http_response_code(500);
+    }
+}
 if (isset($_GET['add_correction'])) {
     $columns = [
         'borough',
@@ -448,6 +509,7 @@ create table street_stretches (
     from_direction text not null default \'\',
     to_direction text not null default \'\',
     points text,
+    needs_trimming int,
     primary key (borough, on_street, from_street, to_street, from_direction, to_direction)
 ) without rowid');
     $db->exec('
