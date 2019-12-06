@@ -80,6 +80,28 @@ function parse_schedule($db, $s, $start_date) {
     return $ret;
 }
 
+function schedule_date($text) {
+    $start_date = null;
+    $end_date = null;
+    preg_match('/Milling & Paving Schedule\s?\n+(.*)/', $text, $match);
+    if (isset($match[1])) {
+        $dates = explode(' to ', $match[1]);
+        if (!isset($dates[1])) {
+            $dates = explode(' through ', $match[1]);
+        }
+        date_default_timezone_set('America/New_York');
+        $start_date = strtotime($dates[0]);
+        $end_date = strtotime($dates[1]);
+    }
+    
+    if (empty($start_date)) {
+        preg_match('/Sunday\s*\n+([^\s]+)\n+No Work/', $text, $match);
+        $start_date = strtotime($match[1]);
+    }
+    
+    return [$start_date, $end_date];
+}
+
 function fetch_updates($db) {
     $urls = [
         'http://www.nyc.gov/html/dot/downloads/pdf/artresurf.pdf',
@@ -105,15 +127,7 @@ function fetch_updates($db) {
             curl_close($curl);
             $text = pdf_to_text($result);
             
-            $start_date = null;
-            $end_date = null;
-            preg_match('/Milling & Paving Schedule\s?\n(.*)/', $text, $match);
-            if (isset($match[1])) {
-                $dates = explode(' to ', $match[1]); 
-                date_default_timezone_set('America/New_York');
-                $start_date = strtotime($dates[0]);
-                $end_date = strtotime($dates[1]);
-            }
+            list($start_date, $end_date) = schedule_date($text);
 
             $q = $db->prepare('insert into schedules values (:url, :access_date, :file, :text, :start_date, :end_date, 0)');
             $q->bindValue(':url', $url); 
@@ -134,17 +148,8 @@ function reconvert_schedules($db) {
     while (($row = $schedules->fetchArray(SQLITE3_ASSOC)) !== false) {
         $text = pdf_to_text($row['file']);
         
-        $start_date = null;
-        $end_date = null;
+        list($start_date, $end_date) = schedule_date($text);
         
-        preg_match('/Milling & Paving Schedule\s?\n(.*)/', $text, $match);
-        if (isset($match[1])) {
-            $dates = explode(' to ', $match[1]); 
-            date_default_timezone_set('America/New_York');
-            $start_date = strtotime($dates[0]);
-            $end_date = strtotime($dates[1]);
-        }
-
         $q->bindValue(':text', $text);
         $q->bindValue(':url', $row['url']);
         $q->bindValue(':start', $start_date);
