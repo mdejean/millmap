@@ -70,7 +70,7 @@ function parse_schedule($db, $s, $start_date) {
             $q->bindValue(':neighborhood', $neighborhood);
             
             if ($q->execute() === false) {
-                echo $action_date, $line . "\n";
+                echo $action_date, "'" . $line . "'" . "\n";
             } else {
                 $ret++;
             }
