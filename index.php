@@ -207,7 +207,7 @@ where ss.points is null");
     $add_ss = $db->prepare('
 insert into street_stretches (borough, on_street, from_street, to_street, from_direction, to_direction, points) values (:borough, :on_street, :from_street, :to_street, :from_direction, :to_direction, :points)');
     while (($row = $street_stretches->fetchArray()) !== false) {
-        $cmd = 'streetstretch ' . escapeshellarg($row['borough'])
+        $cmd = './streetstretch ' . escapeshellarg($row['borough'])
             . ' ' . escapeshellarg($row['on_street']) 
             . ' ' . escapeshellarg($row['from_street']) 
             . ' ' . escapeshellarg($row['to_street'])
