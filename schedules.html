@@ -1,0 +1,120 @@
+<!doctype html>
+<html>
+<head>
+    <title>Milling &amp; Paving Schedules</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.4/dist/leaflet.css">
+    <script src="https://unpkg.com/leaflet@1.3.4/dist/leaflet.js"></script>
+    <script src="proj4.js"></script>
+    <script src="json_table.js"></script>
+    <style type='text/css'>
+html, body {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    font: menu;
+    vertical-align: top;
+}
+
+
+html, body, div, span, applet, object, iframe,
+h1, h2, h3, h4, h5, h6, p, blockquote, pre,
+a, abbr, acronym, address, big, cite, code,
+del, dfn, em, img, ins, kbd, q, s, samp,
+small, strike, strong, sub, sup, tt, var,
+b, u, i, center,
+dl, dt, dd, ol, ul, li,
+fieldset, form, label, legend,
+table, caption, tbody, tfoot, thead, tr, th, td,
+article, aside, canvas, details, embed, 
+figure, figcaption, footer, header, hgroup, 
+menu, nav, output, ruby, section, summary,
+time, mark, audio, video {
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+#errors > input {
+    display: none;
+}
+
+#errors > label {
+    display: inline-block;
+    margin: 2px;
+}
+
+#errors > label::after { 
+    content: "Show/Hide";
+    -moz-appearance: button;
+    -webkit-appearance: button;
+}
+
+#errors > input + table {
+    display: none;
+}
+
+#errors > input:checked + table {
+    display: block;
+}
+
+tr:nth-child(even) {
+    background-color: #ccc;
+}
+
+#schedules a::before {
+    content: " ";
+    background: url(data:image/svg+xml;charset=utf-8;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz48c3ZnIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgd2lkdGg9IjIwIiBoZWlnaHQ9IjIwIiB2aWV3Qm94PSIwIDAgMjAgMjAiPjxwYXRoIGQ9Ik0xNyAxMnY1SDN2LTVIMXY1YTIgMiAwIDAgMCAyIDJoMTRhMiAyIDAgMCAwIDItMnYtNXoiLz48cGF0aCBkPSJNMTAgMTVsNS02aC00VjFIOXY4SDVsNSA2eiIvPjwvc3ZnPg==) no-repeat left center;
+    padding: 0 10px;
+}
+    </style>
+</head>
+<body>
+ <h1>Milling &amp; Paving through November 10th, 2019</h1>
+ <div id=schedules>
+ </div>
+ <script>
+var date_formatter = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric', month: 'short', day: 'numeric', weekday: 'short', timeZone: 'UTC'
+});
+
+function format_date(s) {
+    return date_formatter.format(new Date(Number.parseInt(s) * 1000))
+}
+
+var number_formatter = new Intl.NumberFormat('en-US', {useGrouping: false, maximumSignificantDigits: 3});
+function format_filesize(n) {
+    const exponents = ['', 'k', 'M', 'G', 'T'];
+    let e = 0;
+    while (n > 1000) {
+        n /= 1000;
+        e++;
+    }
+    return number_formatter.format(n) + exponents[e] + 'B';
+}
+ 
+let url = 'schedules.json';
+if (window.location.hostname == 'localhost') {
+    url = 'index.php?schedules';
+}
+
+fetch(url).then(function(response) {
+    response.json().then(function(a) {
+        for (let r of a) {
+            r['link'] = 
+                'index.php?download&url=' + encodeURIComponent(r['url']) 
+                + '&access_date=' + encodeURIComponent(r['access_date']);
+        }
+        document.getElementById('schedules').appendChild(
+            buildHtmlTable(a, {
+                    'access_date': d => document.createTextNode(format_date(d)),
+                    'start_date': d => document.createTextNode(format_date(d)),
+                    'end_date': d => document.createTextNode(format_date(d)),
+                    'filesize': (size) => document.createTextNode(format_filesize(size)),
+                    'link': (l) => {let e = document.createElement('a'); e.href = l; return e;}
+                })
+            );
+        })
+    });
+ </script>
+</body>
+</html>

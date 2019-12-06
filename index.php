@@ -370,6 +370,46 @@ if (cmd('corrections')) {
     list_corrections($db);
 }
 
+if (cmd('schedules')) {
+    header('Content-Type: application/json');
+    $result = $db->query("
+select
+    url,
+    access_date,
+    start_date,
+    end_date,
+    length(file) as filesize
+from schedules order by access_date, url");
+    echo '[';
+    $once = true;
+    while (($row = $result->fetchArray(SQLITE3_ASSOC)) !== false) {
+        if ($once) {
+            $once = false;
+        } else {
+            echo ",\n";
+        }
+        echo json_encode($row);
+    }
+    echo ']';
+}
+
+if (cmd('download')) {
+    $query = $db->prepare("select file from schedules where access_date = :access_date and url = :url");
+    $query->bindValue(":url", $_GET['url']);
+    $query->bindValue(":access_date", $_GET['access_date']);
+    if (!($result = $query->execute())) {
+        http_response_code(500);
+    } else {
+        $row = $result->fetchArray(SQLITE3_ASSOC);
+        if ($row === false) {
+            http_response_code(404);
+        } else {
+            header('Content-Type: application/pdf');
+            echo $row['file'];
+        }
+    }
+}
+
 if (cmd('to_trim')) {
     header('Content-Type: application/json');
     $result = $db->query("
