@@ -53,10 +53,10 @@ function parse_schedule($db, $s, $start_date) {
             $is_milling = false;
         } elseif (stripos($line, 'milling') !== false) {
             $is_milling = true;
-        } elseif (preg_match('/^(\d+-\d+-\d+)? ?([MQKXS][\d-]+)? ?([^(]*)\(([^)]*)( to | ?- ?)([^)]*)\)? ?(- \w+)? ?(\d+)? ?(.*)?$/', $line, $match)) {
+        } elseif (preg_match('/^(\d+-\d+-\d+)? ?([MQKXS][\d-]+)? ?([^(-]*)(\(| ?- ?)([^)-]*)( to | ?- ?)([^)]*)\)? ?(- \w+)? ?(\d+)? ?(.*)?$/', $line, $match)) {
             //example: 7-26-18 M2018-08-17 Broadway (218th St to W 225th St Bridge) 12 Inwood
-            list(            , $date,            $sa,            $on_street, $from_street, , $to_street, , $cb, $neighborhood) = $match;
-
+            list(            , $date,            $sa,            $on_street, , $from_street, , $to_street, , $cb, $neighborhood) = $match;
+            if (empty($on_street) or preg_match('/^([MQKXS]?[\d-]+)$/', $on_street)) continue;
             $q = $db->prepare('insert into actions values (:action_date, :is_milling, :borough, :on_street, :from_street, :to_street, :sa, :cb, :neighborhood)');
             
             $q->bindValue(':action_date', $action_date);
