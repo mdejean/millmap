@@ -195,6 +195,9 @@ fetch(url).then(function(response) {
         let errors = [];
         
         for (let action of a) {
+            if (!action.points) {
+                continue;
+            }
             if ('error_code' in action.points) {
                 let a = action;
                 a.error_code = a.points.error_code;
