@@ -4,6 +4,8 @@
     <title>Milling &amp; Paving Map</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.4/dist/leaflet.css">
     <script src="https://unpkg.com/leaflet@1.3.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/14.0.3/nouislider.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/14.0.3/nouislider.min.js"></script>
     <script src="proj4.js"></script>
     <script src="json_table.js"></script>
     <style type='text/css'>
@@ -25,8 +27,8 @@ b, u, i, center,
 dl, dt, dd, ol, ul, li,
 fieldset, form, label, legend,
 table, caption, tbody, tfoot, thead, tr, th, td,
-article, aside, canvas, details, embed, 
-figure, figcaption, footer, header, hgroup, 
+article, aside, canvas, details, embed,
+figure, figcaption, footer, header, hgroup,
 menu, nav, output, ruby, section, summary,
 time, mark, audio, video {
     margin: 0;
@@ -78,7 +80,7 @@ time, mark, audio, video {
     margin: 2px;
 }
 
-#errors > label::after { 
+#errors > label::after {
     content: "Show/Hide";
     -moz-appearance: button;
     -webkit-appearance: button;
@@ -103,14 +105,25 @@ tr:nth-child(even) {
 #me {
     float: right;
 }
+#bottom {
+    flex: 0;
+    padding: 4px 1em 3px 1em;
+}
+#date_range {
+    margin: 4px 1em 4em 1em;
+}
+.noUi-pips {
+    height: 3em;
+}
     </style>
 </head>
 <body>
- <h1>Milling &amp; Paving through December 14th, 2019</h1>
+ <h1>Milling &amp; Paving through March 22, 2020</h1>
  <div id="map"></div>
- <div>
-     <div id="me">That's it for 2019! Merry Christmas to the Queens DOT employee who randomly chooses between " to " and " - ". Still <a href="https://mdejean.github.io">looking for work</a></div>
-     <div id="errors">Errors this run: <label for=show_errors></label><br><input id=show_errors type=checkbox></div>
+ <div id=bottom>
+     <div id=date_range></div>
+     <div id="me">Now with customizable date range! Still looking for <a href="https://mdejean.github.io">a job</a></div>
+     <div id="errors"></div>
  </div>
  <script>
 proj4.defs('FIPS:3104','+proj=lcc +lat_1=40.66666666666666 +lat_2=41.03333333333333 +lat_0=40.16666666666666 +lon_0=-74 +x_0=300000 +y_0=0 +ellps=GRS80 +datum=NAD83 +to_meter=0.3048006096012192 +no_defs ');
@@ -163,15 +176,64 @@ function popup(actions) {
     return s;
 }
 
+function range(start, stop, step) {
+    if (typeof stop == 'undefined') {
+        // one param defined
+        stop = start;
+        start = 0;
+    }
+
+    if (typeof step == 'undefined') {
+        step = 1;
+    }
+
+    if ((step > 0 && start >= stop) || (step < 0 && start <= stop)) {
+        return [];
+    }
+
+    var result = [];
+    for (var i = start; step > 0 ? i < stop : i > stop; i += step) {
+        result.push(i);
+    }
+
+    return result;
+};
+
 var map = L.map('map');
 var lines = L.layerGroup();
 var legend = L.control({position: 'topright'});
+var date_range = document.getElementById('date_range');
+noUiSlider.create(date_range, {
+    start: [
+        Date.now()/1000 - 24*60*60*150,
+        Date.now()/1000
+    ],
+    connect: true,
+    range: {
+        min: 1535342400,
+        max: Date.now()/1000
+    },
+    pips: {
+        mode: 'values',
+        values: range(0, 12 * ((new Date()).getFullYear() - 2018)
+                            + ((new Date()).getMonth()) - 8 + 1, 3)
+            .map((months) => {
+                let d = new Date('2018-09-01');
+                d.setFullYear(2018 + (months + 8)/12);
+                d.setMonth((months + 8) % 12);
+                return d.valueOf()/1000;
+            }),
+        format: {to: (v) => (new Date(v*1000)).toLocaleString('en-US', {year:'numeric', month: 'short'})}
+    }
+});
+
 legend.onAdd = (map) => {
     let div = L.DomUtil.create('div', 'legend');
-    div.innerHTML += "<div><div class='line red dash'></div>Milling later this week</div>"
-    div.innerHTML += "<div><div class='line red'></div>Milled street</div>"
-    div.innerHTML += "<div><div class='line purple dash'></div>Paving later this week</div>"
-    div.innerHTML += "<div><div class='line blue'></div>Recently paved street</div>"
+    //div.appendChild(date_range);
+    div.innerHTML += "<div><div class='line red dash'></div>Milling later this week</div>";
+    div.innerHTML += "<div><div class='line red'></div>Milled street</div>";
+    div.innerHTML += "<div><div class='line purple dash'></div>Paving later this week</div>";
+    div.innerHTML += "<div><div class='line blue'></div>Recently paved street</div>";
     return div;
 };
 legend.addTo(map);
@@ -187,13 +249,58 @@ if (window.location.hostname == 'localhost') {
     url = 'index.php?actions';
 }
 
-const min_date = Date.now()/1000 - 24*60*60*150;
+function redraw(segments) {
+    //draw each street segment with the most recent action
+    lines.clearLayers();
+
+    for (let v of segments.values()) {
+        let line = points_to_polyline(v.points);
+        v.actions.sort((a, b) => b.action_date - a.action_date);
+
+        //don't show segments with no actions inside the date_range
+        if (   v.actions[0].action_date  //latest action is before the beginning of the range
+                <= date_range.noUiSlider.get()[0]
+            || v.actions[v.actions.length-1].action_date
+                >= date_range.noUiSlider.get()[1]) {//first action is after the end of the range
+            continue;
+        }
+
+        let action = v.actions[0];
+
+        if (action.is_milling && action.action_date >= Date.now()/1000) {
+            line.setStyle({weight: 2, color: '#f00', dashArray: '1 10'});
+        } else if (action.is_milling) {
+            line.setStyle({weight: 2, color: '#f00'});
+        } else if (action.action_date >= Date.now()/1000) {
+            line.setStyle({weight: 2, color: '#a0f', dashArray: '1 10'});
+        } else {
+            line.setStyle({weight: 2, color: '#00f'});
+        }
+
+        line.bindPopup(popup(v.actions));
+        line.addTo(lines);
+    }
+    lines.addTo(map);
+}
+
+function show_errors(errors) {
+    document.getElementById('errors').innerHTML = 'Errors this run: <label for=show_errors></label><br><input id=show_errors type=checkbox>';
+    document.getElementById('errors').appendChild(
+        buildHtmlTable(
+            errors.filter(
+                (e) => e.action_date > date_range.noUiSlider.get()[0]
+                    && e.action_date < date_range.noUiSlider.get()[1]),
+            {
+                'action_date': d => document.createTextNode(format_date(d))
+            })
+        );
+}
 
 fetch(url).then(function(response) {
     response.json().then(function(a) {
         let segments = new Map();
         let errors = [];
-        
+
         for (let action of a) {
             if (!action.points) {
                 continue;
@@ -220,47 +327,21 @@ fetch(url).then(function(response) {
                         segments.set(key, {points: [p1, p2], actions: []})
                     }
                     segments.get(key).actions.push({
-                            action_date: action.action_date, 
-                            is_milling: action.is_milling, 
-                            on_street: action.on_street, 
-                            from_street: action.from_street, 
+                            action_date: action.action_date,
+                            is_milling: action.is_milling,
+                            on_street: action.on_street,
+                            from_street: action.from_street,
                             to_street: action.to_street
                         });
                 }
             }
         }
-        
-        //draw each street segment with the most recent action
-        for (let v of segments.values()) {
-            let line = points_to_polyline(v.points);
-            v.actions.sort((a, b) => b.action_date - a.action_date);
-            let action = v.actions[0];
-            
-            //don't show streets that haven't been touched in the last 150 days
-            if (action.action_date <= min_date) {
-                continue;
-            }
-            
-            if (action.is_milling && action.action_date >= Date.now()/1000) {
-                line.setStyle({weight: 2, color: '#f00', dashArray: '1 10'});
-            } else if (action.is_milling) {
-                line.setStyle({weight: 2, color: '#f00'});
-            } else if (action.action_date >= Date.now()/1000) {
-                line.setStyle({weight: 2, color: '#a0f', dashArray: '1 10'});
-            } else {
-                line.setStyle({weight: 2, color: '#00f'});
-            }
-            
-            line.bindPopup(popup(v.actions));
-            line.addTo(lines);
-        }
-        lines.addTo(map);
-        
-        document.getElementById('errors').appendChild(
-            buildHtmlTable(errors.filter((e) => e.action_date > min_date), {
-                    'action_date': d => document.createTextNode(format_date(d))
-                })
-            );
+
+        redraw(segments);
+        show_errors(errors)
+
+        date_range.noUiSlider.on('set', () => redraw(segments));
+        date_range.noUiSlider.on('set', () => show_errors(errors));
     });
 });
 
