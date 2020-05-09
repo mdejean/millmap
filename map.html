@@ -122,7 +122,7 @@ tr:nth-child(even) {
  <div id="map"></div>
  <div id=bottom>
      <div id=date_range></div>
-     <div id="me">Now with customizable date range! Still looking for <a href="https://mdejean.github.io">a job</a></div>
+     <div id="me">Milling and Paving starts for 2020, not with a bang but with a whimper. Still looking for <a href="https://mdejean.github.io">a job</a></div>
      <div id="errors"></div>
  </div>
  <script>
@@ -206,12 +206,12 @@ var date_range = document.getElementById('date_range');
 noUiSlider.create(date_range, {
     start: [
         Date.now()/1000 - 24*60*60*150,
-        Date.now()/1000
+        Date.now()/1000 + 60*60*24*14
     ],
     connect: true,
     range: {
         min: 1535342400,
-        max: Date.now()/1000
+        max: Date.now()/1000 + 60*60*24*14
     },
     pips: {
         mode: 'values',
