@@ -119,6 +119,9 @@ int main(int argc, char** argv) {
             = (wa2.nbr_x_str[0] - '0') * 100 
             + (wa2.nbr_x_str[1] - '0') * 10 
             + (wa2.nbr_x_str[2] - '0');
+        for (struct coord c = {}; c = intersection_coord(wa2.cross_strs[cross_strs_len].node_nbr)
+        while (memcmp(intersection_coord(wa2.cross_strs[cross_strs_len-1].node_nbr).x, "       ", 7) == 0)
+            cross_strs_len--;
         printf("[");
         for (int i = 0; i < cross_strs_len; i++) {
             struct coord c = intersection_coord(wa2.cross_strs[i].node_nbr);
@@ -127,12 +130,11 @@ int main(int argc, char** argv) {
                 c.x, 
                 c.y, 
                 wa2.cross_strs[i].gap_flag == 'N' ? ", \"gap\": true" : "");
-            if (i == cross_strs_len - 1) {
-                printf("]");
-            } else {
+            if (i != cross_strs_len - 1) {
                 printf(",");
             }
         }
+        printf("]");
     } else {
          printf("{\"error_code\": \"%c%c\", \"error_message\": \"%.80s\"}",
             wa1.output.ret_code[1], wa1.output.ret_code[0],
