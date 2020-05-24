@@ -268,19 +268,34 @@ left join street_stretches ss
     and coalesce(c.new_to_street,   a.to_street  ) = ss.to_street
     and coalesce(c.from_direction, '') = ss.from_direction
     and coalesce(c.to_direction, '') = ss.to_direction
-order by a.is_milling desc, a.action_date");
-    echo '[';
+order by a.action_date, a.is_milling desc");
     $once = true;
+    $prev_date = 0;
+    $f = null;
     while (($row = $result->fetchArray(SQLITE3_ASSOC)) !== false) {
-        if ($once) {
-            $once = false;
-        } else {
-            echo ",\n";
+            if ($row['action_date'] !== $prev_date) {
+                if (!empty($f)) {
+                    fwrite($f, ']');
+                    fclose($f);
+                }
+                $prev_date = $row['action_date'];
+                mkdir('actions/'. date('Y/n', $row['action_date']), 0755, true);
+                $f = fopen('actions/'. date('Y/n/j', $row['action_date']) . '.json', 'wb');
+                fwrite($f, '[');
+                $once = true;
+            if ($once) {
+                $once = false;
+            } else {
+                fwrite($f, ",\n");
+            }
+            $row['points'] = json_decode($row['points']);
+            fwrite($f, json_encode($row));
         }
-        $row['points'] = json_decode($row['points']);
-        echo json_encode($row);
     }
-    echo ']';
+    if (!empty($f)) {
+        fwrite($f, ']');
+        fclose($f);
+    }
 }
 
 function list_corrections($db) {
