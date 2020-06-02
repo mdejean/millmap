@@ -142,6 +142,67 @@ function fetch_updates($db) {
     }
 }
 
+function fetch_pavementworks($db, $start_date = null, $end_date = null) {
+    $q = $db->prepare('insert into actions values (:action_date, :is_milling, :borough, :on_street, :from_street, :to_street, :sa, :cb, :neighborhood)');
+    if (empty($start_date)) {
+        $start_date = $db->querySingle('select max(action_date) as date from actions');
+    }
+    if (empty($end_date)) {
+        $end_date = time() + 60*60*24*13;
+    }
+    $boros = ['M' => 1, 'X' => 2, 'B' => 3, 'Q' => 4, 'S' => 5];
+    foreach ($boros as $boro_letter => $boro_number) {
+        echo "boro: $boro_letter\n";
+        $json = json_decode(
+            file_get_contents('https://nycstreets.net/PavementWorks/Project/GetProjectsForPreviewSchedule?' .
+                http_build_query([
+                    'startDate' => date('n/j/Y', $start_date),
+                    'endDate' =>  date('n/j/Y', $end_date),
+                    'boro' => $boro_letter
+                ])
+            )
+        ) or die('json_decode');
+        
+        echo "\tgot " . count($json->WorkScheduleDates) . " days\n";
+        $actions = 0;
+        
+        foreach ($json->WorkScheduleDates as $schedule_day) {
+            foreach ($schedule_day->Projects as $action){
+                if ($action->IsDeleted) continue; //TODO: handle update & delete
+                if (!preg_match('/([^(-]*?)(\(| ?- ?|FROM)([^)-]*)( to | ?- ?)([^)]*)\)?\s*/i', $action->LocationDescription, $match)) {
+                    echo "error parsing:" . $action->LocationDescription . "\n";
+                    $on_street = $action->LocationDescription;
+                    $from_street = '';
+                    $to_street = '';
+                } else {
+                    list(       , $on_street,          , $from_street,      , $to_street) = $match;
+                }
+                if (!preg_match('/\/Date\((\d*)\)\//', $schedule_day->WorkScheduleDate, $match)) {
+                    continue;
+                }
+                $action_date = $match[1]/1000;
+                
+                $q->bindValue(':action_date', $action_date);
+                $q->bindValue(':is_milling', $action->CrewGroupID == 12);
+                $q->bindValue(':borough', $boro_number);
+                $q->bindValue(':on_street', trim($on_street));
+                $q->bindValue(':from_street', trim($from_street));
+                $q->bindValue(':to_street', trim($to_street));
+                $q->bindValue(':sa', '');
+                $q->bindValue(':cb', '');
+                $q->bindValue(':neighborhood', '');
+                
+                if (@!$q->execute()) {
+                    echo "failed: $action_date: $on_street ($from_street - $to_street)\n";
+                }
+                $actions++;
+            }
+        }
+        echo "\tgot $actions actions\n";
+        
+    }
+}
+
 function reconvert_schedules($db) {
     $schedules = $db->query('select url, access_date, file from schedules');
     $q = $db->prepare('update schedules set converted_text = :text, start_date = :start, end_date = :end where url = :url and access_date = :access_date');
@@ -361,6 +422,19 @@ if (cmd('update')) {
     fetch_updates($db);
     $new_actions = parse_schedules($db, false);
     echo "added $new_actions actions\n";
+    add_street_stretches($db);
+}
+
+if (cmd('pavementworks')) {
+    $start_date = null;
+    $end_date = null;
+    if (isset($argv[2])) {
+        $start_date = strtotime($argv[2]);
+    }
+    if (isset($argv[3])) {
+        $end_date = strtotime($argv[3]);
+    }
+    fetch_pavementworks($db, $start_date, $end_date);
     add_street_stretches($db);
 }
 
