@@ -119,10 +119,10 @@ L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
     className: 'tiles'
 }).addTo(map);
 
-/*var url = 'actions.json';
+var url = 'actions/';
 if (window.location.hostname == 'localhost') {
-    url = 'index.php?actions';
-}*/
+    url = 'index.php?actions&path=';
+}
 
 
 function redraw(segments) {
@@ -183,10 +183,10 @@ async function update() {
         range(parseInt(date_range.noUiSlider.get()[0]), 
               parseInt(date_range.noUiSlider.get()[1]),
               24*60*60).map((s) => new Date(s * 1000)).map(
-            (day) => fetch('actions/' + day.getFullYear() 
-                                + '/' + (day.getMonth() + 1) 
-                                + '/' + day.getDate() 
-                                + '.json').then((r) => 
+            (day) => fetch(url + day.getFullYear() 
+                               + '/' + (day.getMonth() + 1) 
+                               + '/' + day.getDate() 
+                               + '.json').then((r) => 
                 !r.ok ? null : r.json().then((response_actions) => {
                     for (let action of response_actions) {
                         if ('error_code' in action) {

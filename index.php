@@ -359,6 +359,48 @@ order by a.action_date, a.is_milling desc");
     }
 }
 
+function actions($db, $date) {
+    $stmt = $db->prepare("
+select
+    a.is_milling,
+    a.action_date,
+    ss.points,
+    a.borough,
+    a.on_street,
+    a.from_street,
+    a.to_street
+from actions a
+left join corrections c
+    on  (a.borough     = c.borough     or c.borough is null)
+    and (a.on_street   = c.on_street   or c.on_street is null)
+    and (a.from_street = c.from_street or c.from_street is null)
+    and (a.to_street   = c.to_street   or c.to_street is null)
+left join street_stretches ss
+    on  coalesce(c.new_borough,     a.borough    ) = ss.borough
+    and coalesce(c.new_on_street,   a.on_street  ) = ss.on_street
+    and coalesce(c.new_from_street, a.from_street) = ss.from_street
+    and coalesce(c.new_to_street,   a.to_street  ) = ss.to_street
+    and coalesce(c.from_direction, '') = ss.from_direction
+    and coalesce(c.to_direction, '') = ss.to_direction
+where action_date = :date
+order by a.action_date, a.is_milling desc");
+    $stmt->bindValue("date", $date);
+    $result = $stmt->execute();
+    echo "[";
+    $once = true;
+    while (($row = $result->fetchArray(SQLITE3_ASSOC)) !== false) {
+        if ($once) {
+            $once = false;
+        } else {
+            echo ",";
+        }
+        $row['points'] = json_decode($row['points']);
+        echo json_encode($row);
+    }
+    echo "]";
+}
+        
+
 function list_corrections($db) {
     $result = $db->query("
 select
@@ -451,7 +493,14 @@ if (cmd('reparse')) {
 
 if (cmd('actions')) {
     header('Content-Type: application/json'); 
-    generate_json($db);
+    if (!empty($argv[2])) {
+        $date = strtotime($argv[2]);
+        actions($db, $date);
+    } elseif (isset($_GET['path'])) {
+        actions($db, DateTime::createFromFormat('!Y/n/j', str_ireplace('.json', '', $_GET['path']))->getTimestamp());
+    } else {
+        generate_json($db);
+    }
 }
 
 if (cmd('corrections')) {
