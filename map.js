@@ -191,7 +191,7 @@ async function update() {
                     for (let action of response_actions) {
                         if ('error_code' in action) {
                             errors.push(a);
-                        } else if ('points' in action) { //legacy: {points: {error_code: xx}}
+                        } else if ('points' in action && action.points) { //legacy: {points: {error_code: xx}}
                             if ('error_code' in action.points) {
                                 let a = action;
                                 a.error_code = a.points.error_code;
