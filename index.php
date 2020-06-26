@@ -169,7 +169,7 @@ function fetch_pavementworks($db, $start_date = null, $end_date = null) {
         foreach ($json->WorkScheduleDates as $schedule_day) {
             foreach ($schedule_day->Projects as $action){
                 if ($action->IsDeleted) continue; //TODO: handle update & delete
-                if (!preg_match('/([^(-]*?)(\(| ?- ?|FROM)([^)-]*)( to | ?- ?)([^)]*)\)?\s*/i', $action->LocationDescription, $match)) {
+                if (!preg_match('/^([^(-]*?)(\(| ?- ?|FROM)([^)-]*)( to | ?- ?)([^),\n]*)\)?\s*/i', $action->LocationDescription, $match)) {
                     echo "error parsing:" . $action->LocationDescription . "\n";
                     $on_street = $action->LocationDescription;
                     $from_street = '';
@@ -334,24 +334,24 @@ order by a.action_date, a.is_milling desc");
     $prev_date = 0;
     $f = null;
     while (($row = $result->fetchArray(SQLITE3_ASSOC)) !== false) {
-            if ($row['action_date'] !== $prev_date) {
-                if (!empty($f)) {
-                    fwrite($f, ']');
-                    fclose($f);
-                }
-                $prev_date = $row['action_date'];
-                mkdir('actions/'. date('Y/n', $row['action_date']), 0755, true);
-                $f = fopen('actions/'. date('Y/n/j', $row['action_date']) . '.json', 'wb');
-                fwrite($f, '[');
-                $once = true;
-            if ($once) {
-                $once = false;
-            } else {
-                fwrite($f, ",\n");
+        if ($row['action_date'] !== $prev_date) {
+            if (!empty($f)) {
+                fwrite($f, ']');
+                fclose($f);
             }
-            $row['points'] = json_decode($row['points']);
-            fwrite($f, json_encode($row));
+            $prev_date = $row['action_date'];
+            mkdir('actions/'. date('Y/n', $row['action_date']), 0755, true);
+            $f = fopen('actions/'. date('Y/n/j', $row['action_date']) . '.json', 'wb');
+            fwrite($f, '[');
+            $once = true;
         }
+        if ($once) {
+            $once = false;
+        } else {
+            fwrite($f, ",\n");
+        }
+        $row['points'] = json_decode($row['points']);
+        fwrite($f, json_encode($row));
     }
     if (!empty($f)) {
         fwrite($f, ']');
