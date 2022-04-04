@@ -169,13 +169,13 @@ function fetch_pavementworks($db, $start_date = null, $end_date = null) {
         foreach ($json->WorkScheduleDates as $schedule_day) {
             foreach ($schedule_day->Projects as $action){
                 if ($action->IsDeleted) continue; //TODO: handle update & delete
-                if (!preg_match('/^([^(-]*?)(\(| ?- ?|FROM)([^)-]*)( to | ?- ?)([^),\n]*)\)?\s*/i', $action->LocationDescription, $match)) {
+                if (!preg_match('/^([^(-]+?(\s*\([^-]+\))?)\s*(\(| ?- ?|FROM|BETWEEN)([^()-]*(\s*\([^-]+\))?)( to | ?- ?| and )([^(),\n]+(\s*\([^-]+\))?)\)?\s*$/im', $action->LocationDescription, $match)) {
                     echo "error parsing:" . $action->LocationDescription . "\n";
-                    $on_street = $action->LocationDescription;
+                    $on_street = str_replace("\n", "", $action->LocationDescription);
                     $from_street = '';
                     $to_street = '';
                 } else {
-                    list(       , $on_street,          , $from_street,      , $to_street) = $match;
+                    list(        , $on_street,          ,                           , $from_street,         ,                , $to_street) = $match;
                 }
                 if (!preg_match('/\/Date\((\d*)\)\//', $schedule_day->WorkScheduleDate, $match)) {
                     continue;
@@ -187,7 +187,7 @@ function fetch_pavementworks($db, $start_date = null, $end_date = null) {
                 $q->bindValue(':borough', $boro_number);
                 $q->bindValue(':on_street', trim($on_street));
                 $q->bindValue(':from_street', trim($from_street));
-                $q->bindValue(':to_street', trim($to_street));
+                $q->bindValue(':to_street', str_replace("\n", "", trim($to_street)));
                 $q->bindValue(':sa', '');
                 $q->bindValue(':cb', '');
                 $q->bindValue(':neighborhood', '');
