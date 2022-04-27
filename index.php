@@ -183,7 +183,7 @@ function fetch_pavementworks($db, $start_date = null, $end_date = null) {
                 $action_date = $match[1]/1000;
                 
                 $q->bindValue(':action_date', $action_date);
-                $q->bindValue(':is_milling', $action->CrewGroupID == 12);
+                $q->bindValue(':is_milling', stripos($action->CrewGroupDescription, 'milling') !== false);
                 $q->bindValue(':borough', $boro_number);
                 $q->bindValue(':on_street', trim($on_street));
                 $q->bindValue(':from_street', trim($from_street));
