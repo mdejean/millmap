@@ -119,7 +119,7 @@ int main(int argc, char** argv) {
             = (wa2.nbr_x_str[0] - '0') * 100 
             + (wa2.nbr_x_str[1] - '0') * 10 
             + (wa2.nbr_x_str[2] - '0');
-        for (struct coord c = {}; c = intersection_coord(wa2.cross_strs[cross_strs_len].node_nbr)
+        // Make sure to end with a real intersection having coordinates
         while (memcmp(intersection_coord(wa2.cross_strs[cross_strs_len-1].node_nbr).x, "       ", 7) == 0)
             cross_strs_len--;
         printf("[");
@@ -137,7 +137,7 @@ int main(int argc, char** argv) {
         printf("]");
     } else {
          printf("{\"error_code\": \"%c%c\", \"error_message\": \"%.80s\"}",
-            wa1.output.ret_code[1], wa1.output.ret_code[0],
+            wa1.output.ret_code[0], wa1.output.ret_code[1],
             wa1.output.msg);
     }
     
