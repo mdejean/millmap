@@ -382,7 +382,7 @@ left join street_stretches ss
     and coalesce(c.new_to_street,   a.to_street  ) = ss.to_street
     and coalesce(c.from_direction, '') = ss.from_direction
     and coalesce(c.to_direction, '') = ss.to_direction
-where action_date = :date
+where abs(action_date - :date) < 60*60*24
 order by a.action_date, a.is_milling desc");
     $stmt->bindValue("date", $date);
     $result = $stmt->execute();
