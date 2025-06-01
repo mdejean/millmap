@@ -306,6 +306,72 @@ insert into street_stretches (borough, on_street, from_street, to_street, from_d
     echo "added $valid valid and $invalid invalid street stretches\n";
 }
 
+function add_nodes($db) {
+    $valid = 0;
+    $invalid = 0;
+
+    $street_stretches = $db->query("
+select 
+    coalesce(c.new_borough,     a.borough    ) borough       ,
+    coalesce(c.new_on_street,   a.on_street  ) on_street     ,
+    coalesce(c.new_from_street, a.from_street) from_street   ,
+    coalesce(c.new_to_street,   a.to_street  ) to_street     ,
+    coalesce(c.from_direction, '')             from_direction,
+    coalesce(c.to_direction, '')               to_direction  
+from actions a 
+left join corrections c
+    on  (a.borough     = c.borough     or c.borough is null)
+    and (a.on_street   = c.on_street   or c.on_street is null)
+    and (a.from_street = c.from_street or c.from_street is null)
+    and (a.to_street   = c.to_street   or c.to_street is null)
+left join street_stretches ss
+    on  coalesce(c.new_borough,     a.borough    ) = ss.borough
+    and coalesce(c.new_on_street,   a.on_street  ) = ss.on_street
+    and coalesce(c.new_from_street, a.from_street) = ss.from_street
+    and coalesce(c.new_to_street,   a.to_street  ) = ss.to_street
+    and coalesce(c.from_direction, '') = ss.from_direction
+    and coalesce(c.to_direction, '') = ss.to_direction
+where ss.nodes is null");
+
+    $add_ss = $db->prepare('
+update street_stretches set nodes = :nodes
+where
+    borough        = :borough and
+    on_street      = :on_street and
+    from_street    = :from_street and
+    to_street      = :to_street and
+    from_direction = :from_direction and
+    to_direction   = :to_direction
+');
+    while (($row = $street_stretches->fetchArray()) !== false) {
+        $cmd = './streetnodes ' . escapeshellarg($row['borough'])
+            . ' ' . escapeshellarg($row['on_street']) 
+            . ' ' . escapeshellarg($row['from_street']) 
+            . ' ' . escapeshellarg($row['to_street'])
+            . ' ' . escapeshellarg($row['from_direction']) 
+            . ' ' . escapeshellarg($row['to_direction']);
+        $out = exec($cmd);
+
+        $add_ss->bindValue(':borough', $row['borough']);
+        $add_ss->bindValue(':on_street', $row['on_street']);
+        $add_ss->bindValue(':from_street', $row['from_street']);
+        $add_ss->bindValue(':to_street', $row['to_street']);
+        $add_ss->bindValue(':from_direction', $row['from_direction']);
+        $add_ss->bindValue(':to_direction', $row['to_direction']);
+        $add_ss->bindValue(':nodes', $out);
+        $add_ss->execute();
+        $add_ss->reset();
+        if (strpos($out, "[") === 0) {
+            $valid++;
+        } else {
+            $invalid++;
+        }
+    }
+    
+    echo "added $valid valid and $invalid invalid street stretches\n";
+}
+
+
 function generate_json($db) {
     $result = $db->query("
 select
@@ -491,8 +557,12 @@ if (cmd('reparse')) {
     add_street_stretches($db);
 }
 
+if (cmd('nodes')) {
+    add_nodes($db);
+}
+
 if (cmd('actions')) {
-    header('Content-Type: application/json'); 
+    header('Content-Type: application/json');
     if (!empty($argv[2])) {
         $date = strtotime($argv[2]);
         actions($db, $date);
