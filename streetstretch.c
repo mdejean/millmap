@@ -163,7 +163,6 @@ int main(int argc, char** argv) {
         }
         
         // repeat original call with the identified directions
-        printf("no! %c %c", dirs[0], dirs[1]);
         
         function_3s(&wa1, &wa2, boro, on_street, argc > 4 ? argv[3] : NULL, argc > 4 ? argv[4] : NULL, dirs[0], dirs[1]);
     }
