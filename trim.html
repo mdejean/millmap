@@ -1,0 +1,174 @@
+<!doctype html>
+<html>
+<head>
+    <title>Milling &amp; Paving Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.4/dist/leaflet.css">
+    <script src="https://unpkg.com/leaflet@1.3.4/dist/leaflet.js"></script>
+    <script src="proj4.js"></script>
+    <script src="json_table.js"></script>
+    <style type='text/css'>
+html, body {
+    height: 100vh;
+    display: block;
+    flex-direction: column;
+    font: menu;
+    vertical-align: top;
+}
+
+
+html, body, div, span, applet, object, iframe,
+h1, h2, h3, h4, h5, h6, p, blockquote, pre,
+a, abbr, acronym, address, big, cite, code,
+del, dfn, em, img, ins, kbd, q, s, samp,
+small, strike, strong, sub, sup, tt, var,
+b, u, i, center,
+dl, dt, dd, ol, ul, li,
+fieldset, form, label, legend,
+table, caption, tbody, tfoot, thead, tr, th, td,
+article, aside, canvas, details, embed, 
+figure, figcaption, footer, header, hgroup, 
+menu, nav, output, ruby, section, summary,
+time, mark, audio, video {
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+#map {
+    height: 80vh;
+}
+
+.line {
+    width: 5em;
+    height: 0;
+    margin-right: 5px;
+    vertical-align: middle;
+    border: 2pt solid;
+    display: inline-block;
+}
+.blue {
+    border-color: blue;
+}
+.red {
+    border-color: red;
+}
+.purple {
+    border-color: #a0f;
+}
+.dash {
+    border-style: dashed;
+}
+
+.tiles {
+    filter: saturate(70%);
+}
+
+    </style>
+</head>
+<body>
+ <h1>Street stretch trimmer</h1>
+ <div id="map"></div>
+ <div>
+    <form id=street_stretches></form>
+ </div>
+ <script>
+proj4.defs('FIPS:3104','+proj=lcc +lat_1=40.66666666666666 +lat_2=41.03333333333333 +lat_0=40.16666666666666 +lon_0=-74 +x_0=300000 +y_0=0 +ellps=GRS80 +datum=NAD83 +to_meter=0.3048006096012192 +no_defs ');
+
+function point_to_latlng(p) {
+    p.x = Number.parseInt(p.x);
+    p.y = Number.parseInt(p.y);
+    p = proj4('FIPS:3104', 'WGS84', p);
+    return L.latLng(p.y, p.x);
+}
+
+function points_to_polyline(points) {
+    lls = [];
+    for (let point of points) {
+        lls.push(point_to_latlng(point));
+    }
+    return L.polyline(lls);;
+}
+
+function save() {
+    let points = [];
+    lines.eachLayer((line) => {
+        if (!line.selected) return;
+        if (line.points[0] != points[points.length-1]) {
+            line.points[0].gap = true;
+            points.push(line.points[0]);
+        }
+        points.push(line.points[1]);
+    });
+    lines.ss.points = JSON.stringify(points);
+    let fd = new FormData();
+    for (let key in lines.ss) {
+        fd.set(key, lines.ss[key]);
+    }
+    fetch('index.php?trim', {method: 'post', body: fd});
+}
+
+function select_segment(l) {
+    l.selected = !l.selected;
+    l.setStyle({color: l.selected ? 'red' : 'blue'});
+}
+
+function choose_stretch(ss) {
+    lines.clearLayers();
+    let p2 = null;
+    for (let p1 of ss.points) {
+        if (p2 && !p1.gap) {
+            let line = points_to_polyline([p2, p1]);
+            line.points = [p2, p1];
+            line.on('click', () => select_segment(line));
+            line.addTo(lines);
+        }
+        p2 = p1;
+    }
+    lines.addTo(map);
+    lines.ss = ss;
+}
+
+var map = L.map('map');
+var lines = L.layerGroup();
+var legend = L.control({position: 'topright'});
+legend.onAdd = (map) => {
+    let div = L.DomUtil.create('div', 'legend');
+    let button = document.createElement('button');
+    button.innerHTML = 'Save';
+    button.addEventListener('click', save);
+    div.appendChild(button);
+    return div;
+};
+legend.addTo(map);
+
+// add an OpenStreetMap tile layer
+L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors',
+    className: 'tiles'
+}).addTo(map);
+
+var url = 'to_trim.json';
+if (window.location.hostname == 'localhost') {
+    url = 'index.php?to_trim';
+}
+
+fetch(url).then(function(response) {
+    response.json().then(function(a) {
+        for (let street_stretch of a) {
+            let input = document.createElement('input');
+            input.type = 'radio';
+            input.name = 'street_stretch';
+            input.addEventListener('click', () => choose_stretch(street_stretch));
+            let label = document.createElement('label');
+            label.style = 'display: block';
+            label.appendChild(input);
+            label.appendChild(new Text(street_stretch.on_street + " (" + street_stretch.from_street + " - " + street_stretch.to_street + ")"));
+            document.getElementById('street_stretches').appendChild(label);
+        }
+    });
+});
+
+map.setView([40.7358,-73.9243], 10);
+ </script>
+</body>
+</html>
